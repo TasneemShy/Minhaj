@@ -1,5 +1,6 @@
 package com.example.minhaj.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -28,6 +29,15 @@ public class User {
 
     private String role;
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "student_courses",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "course_id")
+    )
+    @JsonIgnore
+    private java.util.Set<Course> enrolledCourses = new java.util.HashSet<>();
+
     // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -43,4 +53,7 @@ public class User {
 
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+
+    public java.util.Set<Course> getEnrolledCourses() { return enrolledCourses; }
+    public void setEnrolledCourses(java.util.Set<Course> enrolledCourses) { this.enrolledCourses = enrolledCourses; }
 }

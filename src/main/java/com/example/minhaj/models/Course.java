@@ -1,10 +1,9 @@
 package com.example.minhaj.models;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
 
 @Entity
 @Table(name = "courses")
@@ -14,16 +13,29 @@ public class Course {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank(message = "Course title cannot be empty")
+    @Column(nullable = false)
     private String title;
+
+    @Column(columnDefinition = "TEXT")
     private String description;
+
     private boolean isFree;
+
+    @PositiveOrZero(message = "Price cannot be negative")
     private double price;
+
+    private int lessonCount = 0;
+
+    @ManyToMany(mappedBy = "enrolledCourses", fetch = FetchType.LAZY)
+    @JsonIgnore
+    private java.util.Set<User> enrolledStudents = new java.util.HashSet<>();
 
     // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public String title() { return title; }
+    public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
 
     public String getDescription() { return description; }
@@ -34,4 +46,10 @@ public class Course {
 
     public double getPrice() { return price; }
     public void setPrice(double price) { this.price = price; }
+
+    public int getLessonCount() { return lessonCount; }
+    public void setLessonCount(int lessonCount) { this.lessonCount = lessonCount; }
+
+    public java.util.Set<User> getEnrolledStudents() { return enrolledStudents; }
+    public void setEnrolledStudents(java.util.Set<User> enrolledStudents) { this.enrolledStudents = enrolledStudents; }
 }
