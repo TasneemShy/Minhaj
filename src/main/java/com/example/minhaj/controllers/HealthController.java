@@ -10,6 +10,6 @@ public class HealthController {
 
     @GetMapping("/health")
     public String checkHealth() {
-        return "Lumi Core Backend is Running perfectly!";
+        return "Minhaj Backend is Running perfectly";
     }
 }

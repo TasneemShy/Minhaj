@@ -1,5 +1,6 @@
 package com.example.minhaj.controllers;
 
+import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Lesson;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.LessonRepository;
@@ -23,13 +24,10 @@ public class LessonController {
 
     @GetMapping("/courses/{courseId}/lessons")
     public ResponseEntity<List<Lesson>> getLessonsByCourse(@PathVariable Long courseId) {
-
         if (!courseRepository.existsById(courseId)) {
-            return ResponseEntity.notFound().build();
+            throw new ResourceNotFoundException("Cannot fetch lessons. Course not found with ID: " + courseId);
         }
-
-        List<Lesson> lessons = lessonRepository.findByCourseId(courseId);
-        return ResponseEntity.ok(lessons);
+        return ResponseEntity.ok(lessonRepository.findByCourseId(courseId));
     }
 
     @PostMapping("/admin/courses/{courseId}/lessons")
