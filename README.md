@@ -1,6 +1,6 @@
 # Minhaj - Educational Platform API
 
-Minhaj is an enterprise-grade backend RESTful API designed for an educational learning platform. Built with a production-ready architecture, it provides stateless JWT authentication, role-based access control (RBAC), database auditing, robust exception handling, and interactive OpenAPI documentation.
+Minhaj is a backend REST API for an online learning platform. It covers stateless JWT authentication, role-based access control (RBAC), courses with lessons, student enrollment, course reviews with ratings, email-based password reset, and interactive OpenAPI documentation. It ships with a Docker Compose setup for running the API alongside PostgreSQL.
 
 ---
 
@@ -12,57 +12,73 @@ Minhaj is an enterprise-grade backend RESTful API designed for an educational le
 * **Security:** Spring Security & JWT (JSON Web Tokens)
 * **ORM:** Hibernate / Spring Data JPA
 * **Validation:** Jakarta Validation (`spring-boot-starter-validation`)
+* **Email:** Spring Mail (`spring-boot-starter-mail`), tested with Mailtrap
 * **API Documentation:** Springdoc OpenAPI / Swagger UI
-* **Build Tool:** Maven
+* **Containerization:** Docker & Docker Compose
+* **Build Tool:** Maven (wrapper included)
 
 ---
 
 ## Architectural Highlights
 
-* **DTO Pattern with Java Records:** Separation of persistence entities from API response contracts using Java `record` implementations (`CourseDTO`) to prevent data leakage.
-* **Centralized Exception Handling:** `@ControllerAdvice` (`GlobalExceptionHandler`) to intercept and format runtime exceptions and validation failures into structured, readable JSON responses.
-* **JPA Auditing:** Automated entity lifecycle timestamp tracking (`@CreatedDate`, `@LastModifiedDate`).
-* **Pagination & Dynamic Search:** Scalable data delivery utilizing Spring Data's `Pageable` and `Page` to query large datasets efficiently.
-* **Cross-Origin Resource Sharing (CORS):** Centralized CORS policy in `SecurityConfig` to facilitate cross-origin communication with frontend and mobile clients.
-* **Stateless JWT Security:** Interception filter for Bearer token validation and route authorization.
+* **DTO Pattern with Java Records:** Persistence entities are kept separate from API responses using Java `record` types (`CourseDTO`).
+* **Centralized Exception Handling:** `@ControllerAdvice` (`GlobalExceptionHandler`) turns validation failures and missing resources into structured JSON error responses.
+* **JPA Auditing:** Automatic `createdAt` / `updatedAt` timestamps (`@CreatedDate`, `@LastModifiedDate`).
+* **Pagination & Search:** Course listing uses Spring Data's `Pageable` and `Page` with case-insensitive title search.
+* **Entity Relationships:** Course → Lessons (one-to-many), Students ↔ Courses (many-to-many enrollment), Course → Reviews and User → Reviews (one-to-many).
+* **CORS:** Centralized CORS policy in `SecurityConfig` for frontend and mobile clients.
+* **Stateless JWT Security:** A request filter validates Bearer tokens and applies role-based route rules.
+* **Externalized Secrets:** Mail credentials and the JWT signing key are read from environment variables (or a local `.env` file) instead of being hard-coded.
 
 ---
 
-## Features Implemented
+## Features
 
 ### 1. Authentication & Security
 
-* User registration with BCrypt password hashing.
-* Stateless login issuing cryptographically signed JWT tokens.
-* Role-Based Access Control distinguishing standard students from administrators.
-* Fine-grained route security rules with custom `SecurityFilterChain`.
+* User registration with BCrypt password hashing and a welcome email.
+* Login that issues a signed JWT (valid for 24 hours); tokens stay valid across restarts because the signing key comes from configuration.
+* Forgot-password flow: emails a one-time reset token valid for 15 minutes.
+* Role-based access control distinguishing students (`STUDENT`) from administrators (`ADMIN`).
 
 ### 2. Course Management
 
-* Full CRUD capabilities for administrators to create, update, and remove courses.
-* Paginated catalog browsing with case-insensitive search queries.
-* Student enrollment tracking and personal course retrieval.
+* Full CRUD for administrators to create, update, and delete courses.
+* Free and paid courses (free courses always have a price of `0`).
+* Paginated catalog browsing with case-insensitive search.
+* Student enrollment and a "my courses" view.
 
-### 3. Interactive API Documentation
+### 3. Lessons
 
-* Automated OpenAPI 3.1 specification generation.
-* Secured Swagger UI equipped with JWT Bearer authentication support for browser-based testing.
+* Administrators can add lessons (title and video URL) to a course.
+* Anyone can list a course's lessons; the course's lesson count is tracked automatically.
+
+### 4. Reviews & Ratings
+
+* Logged-in users can review a course with a comment and rating, once per course.
+* Each course keeps a running average rating and review count.
+* Reviews can be listed per course or per user.
+
+### 5. Interactive API Documentation
+
+* Automatically generated OpenAPI specification.
+* Swagger UI with JWT Bearer authentication support for testing in the browser.
 
 ---
 
 ## API Documentation (Swagger UI)
 
-When the service is running, explore and test the endpoints directly in the browser:
+When the service is running, explore and test the endpoints in the browser:
 
 * **Swagger UI:** [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
 * **OpenAPI Specification JSON:** [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 
-> **Testing Protected Routes in Swagger:**
-> 1. Execute `POST /api/auth/login` with your credentials to obtain a token.
-> 2. Click the **Authorize** button at the top of the Swagger interface.
-> 3. Paste the JWT token (without prefix) into the `Value` field and submit.
-> 
-> 
+> **Testing protected routes in Swagger:**
+> 1. Call `POST /api/auth/login` with your credentials to get a token.
+> 2. Click the **Authorize** button at the top of the Swagger page.
+> 3. Paste the JWT token (without the `Bearer ` prefix) into the `Value` field and submit.
+
+A Postman collection is also included in the `postman/` folder.
 
 ---
 
@@ -72,68 +88,122 @@ When the service is running, explore and test the endpoints directly in the brow
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `POST` | `/api/auth/register` | Register a new user account | Public |
-| `POST` | `/api/auth/login` | Authenticate and obtain JWT token | Public |
+| `POST` | `/api/auth/register` | Register a new account and get a JWT | Public |
+| `POST` | `/api/auth/login` | Log in and get a JWT | Public |
+| `POST` | `/api/auth/forgot-password` | Email a password reset token (body: `{"email"}`) | Public |
+| `POST` | `/api/auth/reset-password` | Set a new password (body: `{"token", "newPassword"}`) | Public |
 
-### Course Catalog & Learning (`/api`)
+### Course Catalog & Learning
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
 | `GET` | `/api/courses` | List courses (supports `page`, `size`, `search`) | Public |
-| `GET` | `/api/courses/{id}` | Retrieve specific course details | Public |
-| `POST` | `/api/courses/{id}/enroll` | Enroll the authenticated user into a course | Authenticated |
-| `GET` | `/api/my-courses` | Retrieve enrolled courses for current user | Authenticated |
+| `GET` | `/api/courses/{id}` | Get a course's details | Public |
+| `GET` | `/api/courses/{courseId}/lessons` | List a course's lessons | Public |
+| `POST` | `/api/courses/{id}/enroll` | Enroll the current user in a course | Authenticated |
+| `GET` | `/api/my-courses` | List the current user's enrolled courses | Authenticated |
 
-### Course Administration (`/api/admin/courses`)
+### Reviews
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `POST` | `/api/admin/courses` | Create a new course | Admin |
-| `PUT` | `/api/admin/courses/{id}` | Update existing course attributes | Admin |
-| `DELETE` | `/api/admin/courses/{id}` | Remove a course from the platform | Admin |
+| `GET` | `/api/courses/{courseId}/reviews` | List a course's reviews | Public |
+| `POST` | `/api/courses/{courseId}/reviews` | Review a course (body: `{"comment", "rating"}`) | Authenticated |
+| `GET` | `/api/users/{userId}/reviews` | List a user's reviews | Authenticated |
+
+### Administration (`/api/admin`)
+
+| HTTP Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `POST` | `/api/admin/courses` | Create a course | Admin |
+| `PUT` | `/api/admin/courses/{id}` | Update a course | Admin |
+| `DELETE` | `/api/admin/courses/{id}` | Delete a course | Admin |
+| `POST` | `/api/admin/courses/{courseId}/lessons` | Add a lesson to a course | Admin |
+| `GET` | `/api/admin/users` | List all users (passwords never returned) | Admin |
+
+### System
+
+| HTTP Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `GET` | `/api/health` | Check that the service is running | Public |
 
 ---
 
 ## Getting Started
 
-### Prerequisites
+### 1. Clone the repository
 
-* JDK 25
-* Apache Maven 3.9+
-* PostgreSQL 16+ running locally on port `5432`
-
-### Setup & Run
-
-1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/Minhaj.git
+git clone https://github.com/TasneemShy/Minhaj.git
 cd Minhaj
-
 ```
 
+### 2. Configure environment variables
 
-2. Configure database credentials in `src/main/resources/application.properties`:
-```properties
-spring.datasource.url=jdbc:postgresql://localhost:5432/minhaj_db
-spring.datasource.username=postgres
-spring.datasource.password=your_password
-spring.jpa.hibernate.ddl-auto=update
+Secrets are kept out of the code. Copy the example file, then fill in your SMTP (e.g. [Mailtrap](https://mailtrap.io)) credentials and a JWT signing key:
 
-```
-
-
-3. Build and launch the application:
 ```bash
-mvn clean spring-boot:run
-
+cp .env.example .env
 ```
 
+```properties
+MAIL_USERNAME=your-mailtrap-username
+MAIL_PASSWORD=your-mailtrap-password
+JWT_SECRET=your-base64-jwt-secret
+```
 
+Generate a JWT secret (a base64-encoded 256-bit key) with:
+
+```bash
+openssl rand -base64 32
+```
+
+`.env` is ignored by git. The app reads it automatically when run locally, and Docker Compose passes it into the container.
+
+### Option A: Run with Docker (recommended)
+
+Prerequisites: JDK 25 and Docker.
+
+```bash
+./mvnw package -DskipTests
+docker build -t minhaj-backend .
+docker compose up
+```
+
+This starts:
+
+* **PostgreSQL** (`minhaj-db`), reachable from your machine on port `5433`.
+* **The API** (`minhaj-app`) on [http://localhost:8080](http://localhost:8080), started once the database is healthy.
+
+Rebuild the jar and image after code changes. To wipe the database and start fresh, run `docker compose down -v`.
+
+### Option B: Run locally
+
+Prerequisites: JDK 25 and PostgreSQL running on port `5432` with a `minhaj_db` database.
+
+1. Set your database credentials in `src/main/resources/application.properties`:
+
+   ```properties
+   spring.datasource.url=jdbc:postgresql://localhost:5432/minhaj_db
+   spring.datasource.username=your_username
+   spring.datasource.password=your_password
+   ```
+
+2. Start the application:
+
+   ```bash
+   ./mvnw spring-boot:run
+   ```
+
+### Running tests
+
+```bash
+./mvnw test
+```
 
 ---
 
 ## Roadmap
 
-* [ ] AWS S3 Cloud Integration for course assets and media uploads.
-* [ ] Advanced Course Reviews & Rating calculations.
+* [ ] AWS S3 integration for course images and lesson media.
 * [ ] Administrative analytics dashboard endpoints.

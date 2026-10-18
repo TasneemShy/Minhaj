@@ -43,3 +43,5 @@ jobs:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/minhaj_db
           SPRING_DATASOURCE_USERNAME: minhaj_user
           SPRING_DATASOURCE_PASSWORD: minhaj_password
+          # Test-only signing key; not used anywhere else
+          JWT_SECRET: 6HXvmaRrAQl5/BxCsO9S/W2OXRhp28AAtl/3h+43d30=
