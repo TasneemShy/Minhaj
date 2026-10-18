@@ -65,7 +65,13 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * Each course keeps a running average rating and review count.
 * Reviews can be listed per course or per user.
 
-### 6. Interactive API Documentation
+### 6. Admin Analytics
+
+* Platform overview: user counts per role, free vs paid courses, categories, lessons, enrollments, reviews, average rating, and completed lessons.
+* Top courses ranked by enrollments, rating, or review count, plus per-category and per-course statistics (including average lesson completion across enrolled students).
+* All figures are aggregated in the database rather than by loading records into memory.
+
+### 7. Interactive API Documentation
 
 * Automatically generated OpenAPI specification.
 * Swagger UI with JWT Bearer authentication support for testing in the browser.
@@ -153,6 +159,15 @@ A Postman collection is also included in the `postman/` folder.
 | `PUT` | `/api/admin/categories/{id}` | Rename or describe a category | Admin |
 | `DELETE` | `/api/admin/categories/{id}` | Delete a category (only if no courses use it) | Admin |
 
+### Analytics (`/api/admin/analytics`)
+
+| HTTP Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `GET` | `/api/admin/analytics/overview` | Platform totals: users (and per role), courses (free/paid), categories, lessons, enrollments, reviews, average rating, completed lessons | Admin |
+| `GET` | `/api/admin/analytics/top-courses` | Top courses; `by=enrollments` (default), `rating` or `reviews`, `limit=1..50` (default `5`) | Admin |
+| `GET` | `/api/admin/analytics/categories` | Course count, enrollments and average rating per category, plus an `Uncategorized` row | Admin |
+| `GET` | `/api/admin/analytics/courses/{id}` | One course's enrollments, lessons, reviews, average rating and average completion % | Admin |
+
 ### System
 
 | HTTP Method | Endpoint | Description | Access |
@@ -238,4 +253,3 @@ Prerequisites: JDK 25 and PostgreSQL running on port `5432` with a `minhaj_db` d
 ## Roadmap
 
 * [ ] AWS S3 integration for course images and lesson media.
-* [ ] Administrative analytics dashboard endpoints.
