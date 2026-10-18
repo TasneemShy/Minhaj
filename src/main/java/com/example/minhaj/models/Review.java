@@ -2,6 +2,8 @@ package com.example.minhaj.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 
 @Entity
@@ -16,6 +18,8 @@ public class Review {
     @Column(nullable = false)
     private String comment;
 
+    @Min(value = 1, message = "Rating must be at least 1")
+    @Max(value = 5, message = "Rating must be at most 5")
     private int rating;
 
     @ManyToOne(fetch = FetchType.LAZY)

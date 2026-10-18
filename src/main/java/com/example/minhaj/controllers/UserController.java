@@ -1,13 +1,13 @@
 package com.example.minhaj.controllers;
 
-import com.example.minhaj.models.User;
+import com.example.minhaj.dtos.UserDTO;
 import com.example.minhaj.repositories.UserRepository;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/api/admin/users")
 public class UserController {
 
     private final UserRepository userRepository;
@@ -16,13 +16,10 @@ public class UserController {
         this.userRepository = userRepository;
     }
 
-    @PostMapping
-    public User createUser(@RequestBody User user) {
-        return userRepository.save(user);
-    }
-
     @GetMapping
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
+    public List<UserDTO> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(user -> new UserDTO(user.getId(), user.getName(), user.getEmail(), user.getRole()))
+                .toList();
     }
 }

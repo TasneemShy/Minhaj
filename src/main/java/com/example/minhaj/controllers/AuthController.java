@@ -1,6 +1,7 @@
 package com.example.minhaj.controllers;
 
 import com.example.minhaj.config.JwtUtil;
+import com.example.minhaj.dtos.RegisterRequest;
 import com.example.minhaj.models.PasswordResetToken;
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.PasswordResetTokenRepository;
@@ -36,18 +37,17 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody User user) {
+    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest request) {
 
-        if (userRepository.findByEmail(user.getEmail()).isPresent()) {
+        if (userRepository.findByEmail(request.email()).isPresent()) {
             return ResponseEntity.badRequest().body("Error: Email is already registered!");
         }
 
-        String hashedPassword = passwordEncoder.encode(user.getPassword());
-        user.setPassword(hashedPassword);
-
-        if (user.getRole() == null || user.getRole().isEmpty()) {
-            user.setRole("STUDENT");
-        }
+        User user = new User();
+        user.setName(request.name());
+        user.setEmail(request.email());
+        user.setPassword(passwordEncoder.encode(request.password()));
+        user.setRole("STUDENT");
 
         userRepository.save(user);
         emailService.sendWelcomeEmail(user.getEmail(), user.getName());
@@ -59,19 +59,12 @@ public class AuthController {
     public ResponseEntity<?> loginUser(@RequestBody User loginRequest) {
         var userOptional = userRepository.findByEmail(loginRequest.getEmail());
 
-        if (userOptional.isPresent()) {
-            User existingUser = userOptional.get();
-
-            if (passwordEncoder.matches(loginRequest.getPassword(), existingUser.getPassword())) {
-
-                return ResponseEntity.ok(generateAuthResponse(existingUser, "Login successful"));
-
-            } else {
-                return ResponseEntity.status(401).body("Error: Invalid password!");
-            }
-        } else {
-            return ResponseEntity.status(404).body("Error: User not found!");
+        if (userOptional.isPresent()
+                && passwordEncoder.matches(loginRequest.getPassword(), userOptional.get().getPassword())) {
+            return ResponseEntity.ok(generateAuthResponse(userOptional.get(), "Login successful"));
         }
+
+        return ResponseEntity.status(401).body("Error: Invalid email or password!");
     }
 
     private Map<String, String> generateAuthResponse(User user, String message) {
@@ -95,6 +88,9 @@ public class AuthController {
         User user = userOptional.get();
 
         String token = java.util.UUID.randomUUID().toString();
+
+        tokenRepository.deleteByUser(user);
+        tokenRepository.flush();
 
         PasswordResetToken resetToken = new PasswordResetToken(token, user);
         tokenRepository.save(resetToken);
