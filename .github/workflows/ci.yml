@@ -95,20 +95,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v6
-        with:
-          java-version: '25'
-          distribution: 'temurin'
-          cache: maven
-
-      # Ensures target/*.jar exists for a Dockerfile that copies a prebuilt jar;
-      # harmless if the Dockerfile builds the jar itself.
-      - name: Package jar
-        run: |
-          chmod +x mvnw
-          ./mvnw -B package -DskipTests
-
+      # The multi-stage Dockerfile compiles the jar itself, so no JDK setup is needed here.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
