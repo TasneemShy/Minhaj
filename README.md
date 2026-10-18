@@ -239,20 +239,18 @@ openssl rand -base64 32
 
 ### Option A: Run with Docker (recommended)
 
-Prerequisites: JDK 25 and Docker.
+Prerequisites: Docker (no local JDK or Maven needed — the image is built inside Docker) and a `.env` file in the project root (see `.env.example`).
 
 ```bash
-./mvnw package -DskipTests
-docker build -t minhaj-backend .
-docker compose up
+docker compose up --build
 ```
 
-This starts:
+This builds the `minhaj-backend` image with a multi-stage Dockerfile and starts:
 
 * **PostgreSQL** (`minhaj-db`), reachable from your machine on port `5433`.
-* **The API** (`minhaj-app`) on [http://localhost:8080](http://localhost:8080), started once the database is healthy.
+* **The API** (`minhaj-app`) on [http://localhost:8080](http://localhost:8080), started once the database is healthy. It runs as a non-root user, and `.env` is passed in at runtime, never copied into the image.
 
-Rebuild the jar and image after code changes. To wipe the database and start fresh, run `docker compose down -v`.
+After code changes, run `docker compose up --build` again to rebuild the image (dependencies are cached, so only changed layers rebuild). To wipe the database and start fresh, run `docker compose down -v`.
 
 ### Option B: Run locally
 

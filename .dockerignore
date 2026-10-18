@@ -1,0 +1,27 @@
+# Build output
+target/
+
+# Secrets — never bake into the image
+.env
+.env.*
+!.env.example
+
+# VCS, IDE and tooling
+.git
+.gitignore
+.gitattributes
+.github/
+.idea/
+.vscode/
+.claude/
+*.iml
+.DS_Store
+
+# Not needed to build the app
+postman/
+.postman/
+README.md
+Dockerfile
+.dockerignore
+docker-compose.yml
+mvnw.cmd
