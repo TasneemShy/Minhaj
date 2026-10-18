@@ -22,21 +22,6 @@ jobs:
       contents: read
       checks: write # test report check run
 
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_DB: minhaj_db
-          POSTGRES_USER: minhaj_user
-          POSTGRES_PASSWORD: minhaj_password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -51,14 +36,10 @@ jobs:
       - name: Make Maven wrapper executable
         run: chmod +x mvnw
 
+      # Integration tests start their own Postgres with Testcontainers (Docker is available on
+      # ubuntu-latest), and the JWT secret / mail settings come from src/test/resources/application-test.properties.
       - name: Build and Test with Maven
         run: ./mvnw -B clean verify
-        env:
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/minhaj_db
-          SPRING_DATASOURCE_USERNAME: minhaj_user
-          SPRING_DATASOURCE_PASSWORD: minhaj_password
-          # Test-only signing key; not used anywhere else
-          JWT_SECRET: 6HXvmaRrAQl5/BxCsO9S/W2OXRhp28AAtl/3h+43d30=
 
       - name: Publish test report
         if: always()

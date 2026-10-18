@@ -106,6 +106,11 @@ public class AuthController {
         String token = request.get("token");
         String newPassword = request.get("newPassword");
 
+        // Same rule as RegisterRequest; a missing password used to fail with a 500
+        if (newPassword == null || newPassword.isBlank() || newPassword.length() < 6) {
+            return ResponseEntity.badRequest().body("Error: Password must be at least 6 characters long");
+        }
+
         Optional<PasswordResetToken> tokenOptional = tokenRepository.findByToken(token);
 
         if (tokenOptional.isEmpty()) {
