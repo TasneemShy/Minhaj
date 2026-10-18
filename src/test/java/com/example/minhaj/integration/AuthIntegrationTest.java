@@ -159,7 +159,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
 
         mockMvc.perform(withJson(post("/api/auth/reset-password"), null, json("token", token, "newPassword", "123")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("Password must be at least 6 characters long"));
+                .andExpect(jsonPath("$.errors.newPassword").value("Password must be at least 6 characters long"));
         mockMvc.perform(withJson(post("/api/auth/reset-password"), null, json("token", token)))
                 .andExpect(status().isBadRequest());
 

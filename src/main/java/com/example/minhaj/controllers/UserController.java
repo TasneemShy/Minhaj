@@ -1,6 +1,7 @@
 package com.example.minhaj.controllers;
 
 import com.example.minhaj.exceptions.ApiException;
+import com.example.minhaj.dtos.UpdateRoleRequest;
 import com.example.minhaj.dtos.UserDTO;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.User;
@@ -9,7 +10,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/users")
@@ -36,8 +36,8 @@ public class UserController {
 
     // The user's current JWT still carries the old role; the new one applies after they log in again.
     @PutMapping("/{id}/role")
-    public ResponseEntity<?> updateUserRole(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        String role = body.get("role");
+    public ResponseEntity<?> updateUserRole(@PathVariable Long id, @RequestBody UpdateRoleRequest request) {
+        String role = request.role();
         if (role == null || !ROLES.contains(role)) {
             throw ApiException.badRequest("role must be one of: " + String.join(", ", ROLES));
         }

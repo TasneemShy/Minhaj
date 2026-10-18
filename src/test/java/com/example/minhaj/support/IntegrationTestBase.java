@@ -155,9 +155,8 @@ public abstract class IntegrationTestBase {
     // ---- JSON ----
 
     protected static String courseJson(String title, boolean free, double price, Long categoryId) {
-        String category = categoryId == null ? "null" : "{\"id\":" + categoryId + "}";
         return "{\"title\":\"" + title + "\",\"description\":\"About " + title + "\",\"free\":" + free
-                + ",\"price\":" + price + ",\"category\":" + category + "}";
+                + ",\"price\":" + price + ",\"categoryId\":" + categoryId + "}";
     }
 
     // json("a", "1", "b", "2") -> {"a":"1","b":"2"}; values are plain strings without quotes to escape.

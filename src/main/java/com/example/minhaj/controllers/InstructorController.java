@@ -1,9 +1,11 @@
 package com.example.minhaj.controllers;
 
 import com.example.minhaj.dtos.CourseDTO;
+import com.example.minhaj.dtos.CourseRequest;
+import com.example.minhaj.dtos.LessonDTO;
+import com.example.minhaj.dtos.LessonRequest;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Course;
-import com.example.minhaj.models.Lesson;
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.CourseSpecifications;
@@ -68,18 +70,18 @@ public class InstructorController {
         return courseRepository.findAll(
                 CourseSpecifications.withFilters(null, null, null, null, null, null, instructorId),
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
-        ).map(CourseService::toDTO);
+        ).map(CourseDTO::from);
     }
 
     @PostMapping("/courses")
-    public Course createCourse(@Valid @RequestBody Course course, Authentication authentication) {
-        return courseService.create(course, currentUser(authentication));
+    public CourseDTO createCourse(@Valid @RequestBody CourseRequest request, Authentication authentication) {
+        return CourseDTO.from(courseService.create(request, currentUser(authentication)));
     }
 
     @PutMapping("/courses/{id}")
-    public Course updateCourse(@PathVariable Long id, @Valid @RequestBody Course courseDetails,
-                               Authentication authentication) {
-        return courseService.update(findOwnedCourse(id, authentication), courseDetails);
+    public CourseDTO updateCourse(@PathVariable Long id, @Valid @RequestBody CourseRequest request,
+                                  Authentication authentication) {
+        return CourseDTO.from(courseService.update(findOwnedCourse(id, authentication), request));
     }
 
     @DeleteMapping("/courses/{id}")
@@ -89,8 +91,8 @@ public class InstructorController {
     }
 
     @PostMapping("/courses/{courseId}/lessons")
-    public Lesson addLesson(@PathVariable Long courseId, @Valid @RequestBody Lesson lessonRequest,
-                            Authentication authentication) {
-        return courseService.addLesson(findOwnedCourse(courseId, authentication), lessonRequest);
+    public LessonDTO addLesson(@PathVariable Long courseId, @Valid @RequestBody LessonRequest request,
+                               Authentication authentication) {
+        return LessonDTO.from(courseService.addLesson(findOwnedCourse(courseId, authentication), request));
     }
 }

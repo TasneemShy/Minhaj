@@ -16,10 +16,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import com.example.minhaj.dtos.CourseDTO;
+import com.example.minhaj.dtos.CourseRequest;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @RestController
 @RequestMapping("/api")
@@ -61,30 +62,30 @@ public class CourseController {
         Page<Course> courses = courseRepository.findAll(
                 CourseSpecifications.withFilters(search, categoryId, free, minPrice, maxPrice, minRating, instructorId), pageable);
 
-        Page<CourseDTO> courseDTOs = courses.map(CourseService::toDTO);
+        Page<CourseDTO> courseDTOs = courses.map(CourseDTO::from);
 
         return ResponseEntity.ok(courseDTOs);
     }
 
     @GetMapping("/courses/{id}")
-    public ResponseEntity<Course> getCourseById(@PathVariable Long id) {
+    public ResponseEntity<CourseDTO> getCourseById(@PathVariable Long id) {
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + id));
-        return ResponseEntity.ok(course);
+        return ResponseEntity.ok(CourseDTO.from(course));
     }
 
     @PostMapping("/admin/courses")
-    public Course createCourse(@Valid @RequestBody Course course) {
-        return courseService.create(course, null);
+    public CourseDTO createCourse(@Valid @RequestBody CourseRequest request) {
+        return CourseDTO.from(courseService.create(request, null));
     }
 
     @PutMapping("/admin/courses/{id}")
-    public ResponseEntity<Course> updateCourse(@PathVariable Long id, @Valid @RequestBody Course courseDetails) {
+    public ResponseEntity<CourseDTO> updateCourse(@PathVariable Long id, @Valid @RequestBody CourseRequest request) {
 
         Course existingCourse = courseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cannot update. Course not found with ID: " + id));
 
-        return ResponseEntity.ok(courseService.update(existingCourse, courseDetails));
+        return ResponseEntity.ok(CourseDTO.from(courseService.update(existingCourse, request)));
     }
 
     @DeleteMapping("/admin/courses/{id}")
@@ -118,7 +119,7 @@ public class CourseController {
     }
 
     @GetMapping("/my-courses")
-    public ResponseEntity<?> getMyCourses(java.security.Principal principal) {
+    public ResponseEntity<List<CourseDTO>> getMyCourses(java.security.Principal principal) {
 
         if (principal == null) {
             throw ApiException.unauthorized("You must be logged in to view your courses.");
@@ -128,11 +129,11 @@ public class CourseController {
         User student = userRepository.findByEmail(studentEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found in the database."));
 
-        Set<Course> myCourses = student.getEnrolledCourses();
-
-        if (myCourses.isEmpty()) {
-            return ResponseEntity.ok(Map.of("message", "You haven't enrolled in any courses yet."));
-        }
+        // An empty list when the student has not enrolled anywhere yet
+        List<CourseDTO> myCourses = student.getEnrolledCourses().stream()
+                .sorted(Comparator.comparing(Course::getId))
+                .map(CourseDTO::from)
+                .toList();
         return ResponseEntity.ok(myCourses);
     }
 }
