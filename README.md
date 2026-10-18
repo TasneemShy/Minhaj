@@ -68,7 +68,13 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * Each course's average rating (rounded to one decimal) and review count are recalculated from the database after every create, edit, and delete.
 * Reviews can be listed per course or per user, paginated (`page`, `size`; defaults `0`/`10`) and sorted newest first.
 
-### 6. Interactive API Documentation
+### 6. Admin Analytics
+
+* Platform overview: user counts per role, free vs paid courses, categories, lessons, enrollments, reviews, average rating, and completed lessons.
+* Top courses ranked by enrollments, rating, or review count, plus per-category and per-course statistics (including average lesson completion across enrolled students).
+* All figures are aggregated in the database rather than by loading records into memory.
+
+### 7. Interactive API Documentation
 
 * Automatically generated OpenAPI specification.
 * Swagger UI with JWT Bearer authentication support for testing in the browser.
@@ -183,6 +189,15 @@ Instructors can only modify their own courses (`403` otherwise); administrators 
 
 > **Note:** the role is stored in the JWT, so a user whose role was changed keeps their old permissions until they log in again and get a new token.
 
+### Analytics (`/api/admin/analytics`)
+
+| HTTP Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `GET` | `/api/admin/analytics/overview` | Platform totals: users (and per role), courses (free/paid), categories, lessons, enrollments, reviews, average rating, completed lessons | Admin |
+| `GET` | `/api/admin/analytics/top-courses` | Top courses; `by=enrollments` (default), `rating` or `reviews`, `limit=1..50` (default `5`) | Admin |
+| `GET` | `/api/admin/analytics/categories` | Course count, enrollments and average rating per category, plus an `Uncategorized` row | Admin |
+| `GET` | `/api/admin/analytics/courses/{id}` | One course's enrollments, lessons, reviews, average rating and average completion % | Admin |
+
 ### System
 
 | HTTP Method | Endpoint | Description | Access |
@@ -268,4 +283,3 @@ Prerequisites: JDK 25 and PostgreSQL running on port `5432` with a `minhaj_db` d
 ## Roadmap
 
 * [ ] AWS S3 integration for course images and lesson media.
-* [ ] Administrative analytics dashboard endpoints.
