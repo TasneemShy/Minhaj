@@ -11,6 +11,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * **Database:** PostgreSQL
 * **Security:** Spring Security & JWT (JSON Web Tokens)
 * **ORM:** Hibernate / Spring Data JPA
+* **Database Migrations:** Flyway (`spring-boot-starter-flyway`)
 * **Validation:** Jakarta Validation (`spring-boot-starter-validation`)
 * **Email:** Spring Mail (`spring-boot-starter-mail`), tested with Mailtrap
 * **API Documentation:** Springdoc OpenAPI / Swagger UI
@@ -277,6 +278,14 @@ Prerequisites: JDK 25 and PostgreSQL running on port `5432` with a `minhaj_db` d
 ```bash
 ./mvnw test
 ```
+
+### Database migrations
+
+The schema is managed by [Flyway](https://documentation.red-gate.com/flyway). Migrations live in `src/main/resources/db/migration` and run automatically on startup; Hibernate only validates the schema against the entities (`ddl-auto=validate`) and never changes it.
+
+* To change the schema, add a new file with the next version number, e.g. `V2__add_course_language.sql`, and update the entity in the same change. If the entities and the migrations disagree, the app fails to start.
+* Never edit a migration that has already been applied anywhere; Flyway checksums each file and will refuse to start. Write a new migration instead.
+* Databases created before Flyway was introduced (by the old `ddl-auto=update`) are marked as baselined at `V1` on first start and keep their data; empty databases run `V1__baseline.sql`.
 
 ---
 
