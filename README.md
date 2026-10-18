@@ -206,6 +206,12 @@ Instructors can only modify their own courses (`403` otherwise); administrators 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
 | `GET` | `/api/health` | Check that the service is running | Public |
+| `GET` | `/actuator/health` | Overall health (Spring Boot Actuator). Anonymous callers get only `{"status":"UP"}`; ADMIN tokens also see components (database, disk space, …) | Public (details: ADMIN) |
+| `GET` | `/actuator/health/liveness` | Liveness probe: the app is running | Public |
+| `GET` | `/actuator/health/readiness` | Readiness probe: the app can serve traffic and the database is reachable | Public |
+| `GET` | `/actuator/info` | Application name, description, version and build info | Public |
+
+Only `health` and `info` are exposed over HTTP; all other actuator endpoints are disabled on the web. The mail health check is turned off, so a Mailtrap outage never marks the app as down.
 
 ---
 
@@ -252,6 +258,8 @@ This builds the `minhaj-backend` image with a multi-stage Dockerfile and starts:
 
 * **PostgreSQL** (`minhaj-db`), reachable from your machine on port `5433`.
 * **The API** (`minhaj-app`) on [http://localhost:8080](http://localhost:8080), started once the database is healthy. It runs as a non-root user, and `.env` is passed in at runtime, never copied into the image.
+
+The `app` service has a Docker healthcheck that calls `/actuator/health/readiness` (with a 40-second start period for Spring Boot and Flyway), so `docker compose ps` shows `minhaj-app` as `healthy` once the API is up and can reach the database.
 
 After code changes, run `docker compose up --build` again to rebuild the image (dependencies are cached, so only changed layers rebuild). To wipe the database and start fresh, run `docker compose down -v`.
 
