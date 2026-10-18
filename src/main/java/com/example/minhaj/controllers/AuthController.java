@@ -2,8 +2,10 @@ package com.example.minhaj.controllers;
 
 import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.config.JwtUtil;
+import com.example.minhaj.dtos.ForgotPasswordRequest;
 import com.example.minhaj.dtos.LoginRequest;
 import com.example.minhaj.dtos.RegisterRequest;
+import com.example.minhaj.dtos.ResetPasswordRequest;
 import com.example.minhaj.models.PasswordResetToken;
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.PasswordResetTokenRepository;
@@ -79,9 +81,8 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<?> forgotPassword(@RequestBody Map<String, String> request) {
-        String email = request.get("email");
-        Optional<User> userOptional = userRepository.findByEmail(email);
+    public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        Optional<User> userOptional = userRepository.findByEmail(request.email());
 
         if (userOptional.isEmpty()) {
             return ResponseEntity.ok("If the email exists, a reset link has been sent.");
@@ -103,16 +104,8 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> request) {
-        String token = request.get("token");
-        String newPassword = request.get("newPassword");
-
-        // Same rule as RegisterRequest; a missing password used to fail with a 500
-        if (newPassword == null || newPassword.isBlank() || newPassword.length() < 6) {
-            throw ApiException.badRequest("Password must be at least 6 characters long");
-        }
-
-        Optional<PasswordResetToken> tokenOptional = tokenRepository.findByToken(token);
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        Optional<PasswordResetToken> tokenOptional = tokenRepository.findByToken(request.token());
 
         if (tokenOptional.isEmpty()) {
             throw ApiException.badRequest("Invalid Token.");
@@ -126,7 +119,7 @@ public class AuthController {
         }
 
         User user = resetToken.getUser();
-        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
 
         tokenRepository.delete(resetToken);

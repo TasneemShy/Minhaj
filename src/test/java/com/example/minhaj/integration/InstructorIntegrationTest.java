@@ -60,7 +60,7 @@ class InstructorIntegrationTest extends IntegrationTestBase {
         Long id = postForId("/api/instructor/courses", instructor,
                 "{\"title\":\"Mine\",\"price\":10,\"instructor\":{\"id\":424242}}");
         mockMvc.perform(get("/api/courses/" + id))
-                .andExpect(jsonPath("$.instructor.id").value(userId(email)));
+                .andExpect(jsonPath("$.instructorId").value(userId(email)));
 
         mockMvc.perform(withJson(put("/api/instructor/courses/" + id), instructor, courseJson("Mine v2", false, 12, null)))
                 .andExpect(status().isOk())
@@ -166,6 +166,6 @@ class InstructorIntegrationTest extends IntegrationTestBase {
         assertThat(count("courses") + count("lessons") + count("reviews")
                 + count("student_courses") + count("lesson_progress")).isZero();
         mockMvc.perform(auth(get("/api/my-courses"), student))
-                .andExpect(jsonPath("$.message").value("You haven't enrolled in any courses yet."));
+                .andExpect(jsonPath("$.length()").value(0));
     }
 }

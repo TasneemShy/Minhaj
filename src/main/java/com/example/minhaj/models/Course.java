@@ -1,11 +1,6 @@
 package com.example.minhaj.models;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.PositiveOrZero;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -19,7 +14,6 @@ public class Course {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotBlank(message = "Course title cannot be empty")
     @Column(nullable = false)
     private String title;
 
@@ -28,7 +22,6 @@ public class Course {
 
     private boolean isFree;
 
-    @PositiveOrZero(message = "Price cannot be negative")
     private double price;
 
     private int lessonCount = 0;
@@ -44,7 +37,6 @@ public class Course {
     private java.time.LocalDateTime updatedAt;
 
     @ManyToMany(mappedBy = "enrolledCourses", fetch = FetchType.LAZY)
-    @JsonIgnore
     private java.util.Set<User> enrolledStudents = new java.util.HashSet<>();
 
     // Getters and Setters
@@ -99,11 +91,9 @@ public class Course {
     public Category getCategory() { return category; }
     public void setCategory(Category category) { this.category = category; }
 
-    // Owning instructor (null for courses created by an admin). Set by the server, never from the request body.
+    // Owning instructor (null for courses created by an admin). Set by the server.
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "instructor_id")
-    @JsonIgnoreProperties({"email", "role", "password"})
-    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private User instructor;
 
     public User getInstructor() { return instructor; }

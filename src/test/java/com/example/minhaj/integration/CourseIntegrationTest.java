@@ -115,15 +115,18 @@ class CourseIntegrationTest extends IntegrationTestBase {
         Long id = postForId("/api/admin/courses", admin, courseJson("New Course", true, 30, design));
         mockMvc.perform(get("/api/courses/" + id))
                 .andExpect(jsonPath("$.price").value(0.0))
-                .andExpect(jsonPath("$.free").value(true))
-                .andExpect(jsonPath("$.category.id").value(design));
+                .andExpect(jsonPath("$.isFree").value(true))
+                .andExpect(jsonPath("$.categoryId").value(design))
+                .andExpect(jsonPath("$.categoryName").value("Design"))
+                .andExpect(jsonPath("$.createdAt").exists());
 
         // Update
         mockMvc.perform(withJson(put("/api/admin/courses/" + id), admin, courseJson("Renamed", false, 15, programming)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("Renamed"))
                 .andExpect(jsonPath("$.price").value(15.0))
-                .andExpect(jsonPath("$.category.name").value("Programming"));
+                .andExpect(jsonPath("$.categoryId").value(programming))
+                .andExpect(jsonPath("$.categoryName").value("Programming"));
 
         // Delete
         mockMvc.perform(auth(delete("/api/admin/courses/" + id), admin)).andExpect(status().isOk());
@@ -232,14 +235,16 @@ class CourseIntegrationTest extends IntegrationTestBase {
         Long id = createCourse(admin, "Enrol me", false, 10, null);
 
         mockMvc.perform(auth(get("/api/my-courses"), student))
-                .andExpect(jsonPath("$.message").value("You haven't enrolled in any courses yet."));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
 
         enroll(student, id);
         enroll(student, id); // idempotent
 
         mockMvc.perform(auth(get("/api/my-courses"), student))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].title", contains("Enrol me")));
+                .andExpect(jsonPath("$[*].title", contains("Enrol me")))
+                .andExpect(jsonPath("$[0].id").value(id));
         mockMvc.perform(post("/api/courses/" + id + "/enroll"))
                 .andExpect(status().isUnauthorized());
     }

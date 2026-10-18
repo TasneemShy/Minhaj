@@ -26,7 +26,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 
 ## Architectural Highlights
 
-* **DTO Pattern with Java Records:** Persistence entities are kept separate from API responses using Java `record` types (`CourseDTO`).
+* **DTO Pattern with Java Records:** JPA entities never cross the API boundary. Request bodies bind to `record` types with Bean Validation (`CourseRequest`, `LessonRequest`, `ReviewRequest`, `CategoryRequest`, …), so clients cannot set server-owned fields such as `id`, `averageRating`, `reviewCount`, `lessonCount`, `createdAt` or `instructor`. Responses are `record` DTOs (`CourseDTO`, `LessonDTO`, `ReviewDTO`, `CategoryDTO`, `UserDTO`) built with small static `from(...)` factories; reviews name their author by `authorId` and `authorName` only.
 * **Centralized Exception Handling:** `@RestControllerAdvice` (`GlobalExceptionHandler`) and Spring Security's entry point / access-denied handler return every error as RFC 9457 Problem Details (see [Error format](#error-format)).
 * **JPA Auditing:** Automatic `createdAt` / `updatedAt` timestamps (`@CreatedDate`, `@LastModifiedDate`).
 * **Pagination, Filtering & Sorting:** Course listing combines Spring Data's `Pageable` with JPA `Specification`s (`CourseSpecifications`) so any mix of search, category, price, and rating filters becomes a single query.
@@ -121,7 +121,7 @@ A Postman collection is also included in the `postman/` folder.
 | `GET` | `/api/courses/{id}` | Get a course's details | Public |
 | `GET` | `/api/courses/{courseId}/lessons` | List a course's lessons | Public |
 | `POST` | `/api/courses/{id}/enroll` | Enroll the current user in a course | Authenticated |
-| `GET` | `/api/my-courses` | List the current user's enrolled courses | Authenticated |
+| `GET` | `/api/my-courses` | List the current user's enrolled courses (an empty list when there are none) | Authenticated |
 | `GET` | `/api/categories` | List all categories | Public |
 
 #### Course list query parameters
@@ -173,24 +173,41 @@ Instructors can only modify their own courses (`403` otherwise); administrators 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
 | `GET` | `/api/instructor/courses` | List my courses (paged with `page`, `size`) | Instructor, Admin |
-| `POST` | `/api/instructor/courses` | Create a course owned by me (set a category with `"category": {"id": 1}`) | Instructor, Admin |
+| `POST` | `/api/instructor/courses` | Create a course owned by me (body: see [Course request body](#course-request-body)) | Instructor, Admin |
 | `PUT` | `/api/instructor/courses/{id}` | Update my course | Instructor (owner), Admin |
 | `DELETE` | `/api/instructor/courses/{id}` | Delete my course | Instructor (owner), Admin |
-| `POST` | `/api/instructor/courses/{courseId}/lessons` | Add a lesson to my course | Instructor (owner), Admin |
+| `POST` | `/api/instructor/courses/{courseId}/lessons` | Add a lesson to my course (body: `{"title", "videoUrl"}`) | Instructor (owner), Admin |
 
 ### Administration (`/api/admin`)
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `POST` | `/api/admin/courses` | Create a course (set a category with `"category": {"id": 1}`) | Admin |
+| `POST` | `/api/admin/courses` | Create a course (body: see [Course request body](#course-request-body)) | Admin |
 | `PUT` | `/api/admin/courses/{id}` | Update a course | Admin |
 | `DELETE` | `/api/admin/courses/{id}` | Delete a course | Admin |
-| `POST` | `/api/admin/courses/{courseId}/lessons` | Add a lesson to a course | Admin |
+| `POST` | `/api/admin/courses/{courseId}/lessons` | Add a lesson to a course (body: `{"title", "videoUrl"}`) | Admin |
 | `GET` | `/api/admin/users` | List all users (passwords never returned) | Admin |
 | `PUT` | `/api/admin/users/{id}/role` | Set a user's role (body: `{"role": "STUDENT" \| "INSTRUCTOR" \| "ADMIN"}`) | Admin |
-| `POST` | `/api/admin/categories` | Create a category | Admin |
+| `POST` | `/api/admin/categories` | Create a category (body: `{"name", "description"}`) | Admin |
 | `PUT` | `/api/admin/categories/{id}` | Rename or describe a category | Admin |
 | `DELETE` | `/api/admin/categories/{id}` | Delete a category (only if no courses use it) | Admin |
+
+#### Course request body
+
+`POST` and `PUT` on `/api/admin/courses` and `/api/instructor/courses` take the same body. Every field except `title` is optional; `PUT` replaces all of them. A free course always has price `0`.
+
+```json
+{
+  "title": "Spring Boot Mastery",
+  "description": "Build REST APIs with Spring Boot",
+  "price": 49.99,
+  "free": false,
+  "imageUrl": "https://example.com/spring.png",
+  "categoryId": 1
+}
+```
+
+> **Breaking change:** the category used to be sent nested as `"category": {"id": 1}`. It is now a flat `categoryId`; the old nested form is ignored (the course ends up uncategorized). Server-owned fields (`id`, `averageRating`, `reviewCount`, `lessonCount`, `createdAt`, `updatedAt`, `instructor`) are ignored if sent. Course responses always use the `CourseDTO` shape: `categoryId`/`categoryName` and `instructorId`/`instructorName` instead of nested objects, and `isFree` instead of `free`.
 
 > **Note:** the role is stored in the JWT, so a user whose role was changed keeps their old permissions until they log in again and get a new token.
 

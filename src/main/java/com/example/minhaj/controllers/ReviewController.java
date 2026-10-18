@@ -1,5 +1,7 @@
 package com.example.minhaj.controllers;
 
+import com.example.minhaj.dtos.ReviewDTO;
+import com.example.minhaj.dtos.ReviewRequest;
 import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Course;
@@ -47,7 +49,7 @@ public class ReviewController {
             throw new ResourceNotFoundException("Course not found with ID: " + courseId);
         }
         Pageable pageable = PageRequest.of(page, size, NEWEST_FIRST);
-        return ResponseEntity.ok(reviewRepository.findByCourseId(courseId, pageable));
+        return ResponseEntity.ok(reviewRepository.findByCourseId(courseId, pageable).map(ReviewDTO::from));
     }
 
     @GetMapping("/users/{userId}/reviews")
@@ -62,11 +64,11 @@ public class ReviewController {
             throw new ResourceNotFoundException("User not found with ID: " + userId);
         }
         Pageable pageable = PageRequest.of(page, size, NEWEST_FIRST);
-        return ResponseEntity.ok(reviewRepository.findByUserId(userId, pageable));
+        return ResponseEntity.ok(reviewRepository.findByUserId(userId, pageable).map(ReviewDTO::from));
     }
 
     @PostMapping("/courses/{courseId}/reviews")
-    public ResponseEntity<?> addReview(@PathVariable Long courseId, @Valid @RequestBody Review reviewRequest, java.security.Principal principal){
+    public ResponseEntity<?> addReview(@PathVariable Long courseId, @Valid @RequestBody ReviewRequest request, java.security.Principal principal){
 
         if (principal == null) {
             throw ApiException.unauthorized("You must be logged in to leave a review.");
@@ -83,20 +85,21 @@ public class ReviewController {
             throw ApiException.badRequest("You have already reviewed this course.");
         }
 
-        // Never let a client-supplied id turn this insert into an update of someone else's review.
-        reviewRequest.setId(null);
-        reviewRequest.setCourse(course);
-        reviewRequest.setUser(student);
+        Review review = new Review();
+        review.setComment(request.comment());
+        review.setRating(request.rating());
+        review.setCourse(course);
+        review.setUser(student);
 
-        Review savedReview = reviewRepository.save(reviewRequest);
+        Review savedReview = reviewRepository.save(review);
         refreshCourseRating(course);
 
-        return ResponseEntity.ok(savedReview);
+        return ResponseEntity.ok(ReviewDTO.from(savedReview));
     }
 
     @PutMapping("/courses/{courseId}/reviews/{reviewId}")
     public ResponseEntity<?> updateReview(@PathVariable Long courseId, @PathVariable Long reviewId,
-                                          @Valid @RequestBody Review reviewRequest, java.security.Principal principal){
+                                          @Valid @RequestBody ReviewRequest request, java.security.Principal principal){
 
         if (principal == null) {
             throw ApiException.unauthorized("You must be logged in to edit a review.");
@@ -109,13 +112,13 @@ public class ReviewController {
             throw ApiException.forbidden("You can only edit your own review.");
         }
 
-        review.setComment(reviewRequest.getComment());
-        review.setRating(reviewRequest.getRating());
+        review.setComment(request.comment());
+        review.setRating(request.rating());
 
         Review savedReview = reviewRepository.save(review);
         refreshCourseRating(review.getCourse());
 
-        return ResponseEntity.ok(savedReview);
+        return ResponseEntity.ok(ReviewDTO.from(savedReview));
     }
 
     @DeleteMapping("/courses/{courseId}/reviews/{reviewId}")

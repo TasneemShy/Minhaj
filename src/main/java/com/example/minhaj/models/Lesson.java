@@ -1,8 +1,6 @@
 package com.example.minhaj.models;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
 
 @Entity
 @Table(name = "lessons")
@@ -12,7 +10,6 @@ public class Lesson {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotBlank(message = "Lesson title cannot be empty")
     @Column(nullable = false)
     private String title;
 
@@ -20,7 +17,6 @@ public class Lesson {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id", nullable = false)
-    @JsonIgnore
     private Course course;
 
     public Long getId() { return id; }

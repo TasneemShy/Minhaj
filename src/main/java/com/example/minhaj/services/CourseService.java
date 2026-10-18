@@ -1,6 +1,7 @@
 package com.example.minhaj.services;
 
-import com.example.minhaj.dtos.CourseDTO;
+import com.example.minhaj.dtos.CourseRequest;
+import com.example.minhaj.dtos.LessonRequest;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Category;
 import com.example.minhaj.models.Course;
@@ -34,30 +35,35 @@ public class CourseService {
         this.reviewRepository = reviewRepository;
     }
 
-    // The request sends the category as {"id": ...}; load the real entity so a bad ID fails with 404.
-    private Category resolveCategory(Category requested) {
-        if (requested == null || requested.getId() == null) {
+    // Load the real category so a bad ID fails with 404.
+    private Category resolveCategory(Long categoryId) {
+        if (categoryId == null) {
             return null;
         }
-        return categoryRepository.findById(requested.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Category not found with ID: " + requested.getId()));
+        return categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found with ID: " + categoryId));
     }
 
-    public Course create(Course course, User instructor) {
-        if (course.isFree()) {
-            course.setPrice(0.0);
-        }
-        course.setCategory(resolveCategory(course.getCategory()));
+    // Copies only the client-editable fields; counters, rating, timestamps and the instructor stay server-controlled.
+    private void apply(Course course, CourseRequest request) {
+        boolean free = Boolean.TRUE.equals(request.free());
+        course.setTitle(request.title());
+        course.setDescription(request.description());
+        course.setFree(free);
+        course.setPrice(free || request.price() == null ? 0.0 : request.price());
+        course.setImageUrl(request.imageUrl());
+        course.setCategory(resolveCategory(request.categoryId()));
+    }
+
+    public Course create(CourseRequest request, User instructor) {
+        Course course = new Course();
+        apply(course, request);
         course.setInstructor(instructor);
         return courseRepository.save(course);
     }
 
-    public Course update(Course existingCourse, Course courseDetails) {
-        existingCourse.setTitle(courseDetails.getTitle());
-        existingCourse.setDescription(courseDetails.getDescription());
-        existingCourse.setFree(courseDetails.isFree());
-        existingCourse.setPrice(courseDetails.isFree() ? 0.0 : courseDetails.getPrice());
-        existingCourse.setCategory(resolveCategory(courseDetails.getCategory()));
+    public Course update(Course existingCourse, CourseRequest request) {
+        apply(existingCourse, request);
         return courseRepository.save(existingCourse);
     }
 
@@ -73,29 +79,15 @@ public class CourseService {
         courseRepository.deleteById(courseId);
     }
 
-    public Lesson addLesson(Course course, Lesson lesson) {
+    public Lesson addLesson(Course course, LessonRequest request) {
+        Lesson lesson = new Lesson();
+        lesson.setTitle(request.title());
+        lesson.setVideoUrl(request.videoUrl());
         lesson.setCourse(course);
         Lesson savedLesson = lessonRepository.save(lesson);
 
         course.setLessonCount(course.getLessonCount() + 1);
         courseRepository.save(course);
         return savedLesson;
-    }
-
-    public static CourseDTO toDTO(Course course) {
-        return new CourseDTO(
-                course.getId(),
-                course.getTitle(),
-                course.getDescription(),
-                course.getPrice(),
-                course.isFree(),
-                course.getAverageRating(),
-                course.getReviewCount(),
-                course.getImageUrl(),
-                course.getCategory() != null ? course.getCategory().getId() : null,
-                course.getCategory() != null ? course.getCategory().getName() : null,
-                course.getInstructor() != null ? course.getInstructor().getId() : null,
-                course.getInstructor() != null ? course.getInstructor().getName() : null
-        );
     }
 }
