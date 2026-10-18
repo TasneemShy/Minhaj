@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/TasneemShy/Minhaj/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TasneemShy/Minhaj/actions/workflows/ci.yml)
 
+Dependencies are kept current by [Dependabot](.github/dependabot.yml) (weekly update PRs for Maven, GitHub Actions and Docker).
+
 Minhaj is a backend REST API for an online learning platform. It covers stateless JWT authentication, role-based access control (RBAC), courses with lessons, student enrollment, course reviews with ratings, email-based password reset, and interactive OpenAPI documentation. It ships with a Docker Compose setup for running the API alongside PostgreSQL.
 
 ---
