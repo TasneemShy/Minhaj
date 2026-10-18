@@ -3,6 +3,7 @@ package com.example.minhaj.web;
 import com.example.minhaj.config.JwtRequestFilter;
 import com.example.minhaj.config.JwtUtil;
 import com.example.minhaj.config.SecurityConfig;
+import com.example.minhaj.config.SecurityProblemHandler;
 import com.example.minhaj.controllers.CategoryController;
 import com.example.minhaj.repositories.CategoryRepository;
 import com.example.minhaj.repositories.CourseRepository;
@@ -22,6 +23,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Optional;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
@@ -29,13 +32,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 // Fast slice (no database): the error-response format produced by GlobalExceptionHandler, with the real
 // security chain and JWT filter in front of a controller whose repositories are mocked.
 @WebMvcTest(CategoryController.class)
-@Import({SecurityConfig.class, JwtRequestFilter.class, JwtUtil.class, GlobalExceptionHandlerWebMvcTest.JwtFilterOnlyInSecurityChain.class})
+@Import({SecurityConfig.class, SecurityProblemHandler.class, JwtRequestFilter.class, JwtUtil.class, GlobalExceptionHandlerWebMvcTest.JwtFilterOnlyInSecurityChain.class})
 @ActiveProfiles("test")
 class GlobalExceptionHandlerWebMvcTest {
 
@@ -72,23 +76,33 @@ class GlobalExceptionHandlerWebMvcTest {
     }
 
     @Test
-    void validationErrorsAreAFieldToMessageMap() throws Exception {
+    void validationErrorsAreAProblemDetailWithAFieldToMessageMap() throws Exception {
         mockMvc.perform(post("/api/admin/categories")
                         .header("Authorization", adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"  \"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.name").value("Category name cannot be empty"))
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value("about:blank"))
+                .andExpect(jsonPath("$.title").value("Bad Request"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.detail").value("Request validation failed."))
+                .andExpect(jsonPath("$.instance").value("/api/admin/categories"))
+                .andExpect(jsonPath("$.errors.name").value("Category name cannot be empty"))
+                .andExpect(jsonPath("$.errors.length()").value(1));
     }
 
     @Test
-    void resourceNotFoundIs404WithErrorMessage() throws Exception {
+    void resourceNotFoundIs404ProblemDetail() throws Exception {
         when(categoryRepository.findById(anyLong())).thenReturn(Optional.empty());
 
         mockMvc.perform(delete("/api/admin/categories/42").header("Authorization", adminBearer()))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error").value("Category not found with ID: 42"));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.title").value("Not Found"))
+                .andExpect(jsonPath("$.detail").value("Category not found with ID: 42"))
+                .andExpect(jsonPath("$.instance").value("/api/admin/categories/42"));
     }
 
     @Test
@@ -98,27 +112,31 @@ class GlobalExceptionHandlerWebMvcTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": "))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Malformed or unreadable request body."));
+                .andExpect(jsonPath("$.detail").value("Malformed or unreadable request body."));
     }
 
     @Test
     void unknownPathIs404NotServerError() throws Exception {
         mockMvc.perform(get("/api/admin/does-not-exist").header("Authorization", adminBearer()))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.detail").value("Not found: /api/admin/does-not-exist"));
     }
 
     @Test
     void wrongPathVariableTypeIs400() throws Exception {
         mockMvc.perform(delete("/api/admin/categories/abc").header("Authorization", adminBearer()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Invalid value 'abc' for parameter 'id'."));
+                .andExpect(jsonPath("$.detail").value("Invalid value 'abc' for parameter 'id'."));
     }
 
     @Test
     void unsupportedMethodIs405() throws Exception {
         mockMvc.perform(patch("/api/admin/categories/1")
                         .header("Authorization", adminBearer()))
-                .andExpect(status().isMethodNotAllowed());
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.status").value(405))
+                .andExpect(jsonPath("$.detail").value("Method PATCH is not supported for this endpoint."));
     }
 
     @Test
@@ -128,7 +146,10 @@ class GlobalExceptionHandlerWebMvcTest {
 
         mockMvc.perform(get("/api/categories"))
                 .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error").value("Something went wrong on our end!"));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.detail").value("Something went wrong on our end!"))
+                .andExpect(content().string(not(containsString("database exploded"))));
     }
 
     @Test
@@ -137,6 +158,33 @@ class GlobalExceptionHandlerWebMvcTest {
                         .header("Authorization", "Bearer " + jwtUtil.generateToken("s@test.com", "STUDENT"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"X\"}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.instance").value("/api/admin/categories"));
+    }
+
+    @Test
+    void missingTokenIs401ProblemDetail() throws Exception {
+        mockMvc.perform(post("/api/admin/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"X\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.detail").value("Authentication is required to access this resource."));
+    }
+
+    @Test
+    void duplicateCategoryNameIsA400ProblemDetail() throws Exception {
+        when(categoryRepository.existsByNameIgnoreCase("Design")).thenReturn(true);
+
+        mockMvc.perform(post("/api/admin/categories")
+                        .header("Authorization", adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Design\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("A category with this name already exists."));
     }
 }

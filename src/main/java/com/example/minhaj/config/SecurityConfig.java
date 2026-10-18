@@ -17,9 +17,11 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtRequestFilter jwtRequestFilter;
+    private final SecurityProblemHandler securityProblemHandler;
 
-    public SecurityConfig(JwtRequestFilter jwtRequestFilter) {
+    public SecurityConfig(JwtRequestFilter jwtRequestFilter, SecurityProblemHandler securityProblemHandler) {
         this.jwtRequestFilter = jwtRequestFilter;
+        this.securityProblemHandler = securityProblemHandler;
     }
 
     @Bean
@@ -40,6 +42,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**", "/api/health", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(securityProblemHandler).accessDeniedHandler(securityProblemHandler))
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

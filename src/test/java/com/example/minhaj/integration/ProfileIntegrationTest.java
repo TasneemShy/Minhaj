@@ -40,7 +40,7 @@ class ProfileIntegrationTest extends IntegrationTestBase {
 
         mockMvc.perform(withJson(put("/api/profile"), token, json("name", " ")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.name").value("Name cannot be empty"));
+                .andExpect(jsonPath("$.errors.name").value("Name cannot be empty"));
     }
 
     @Test
@@ -50,12 +50,12 @@ class ProfileIntegrationTest extends IntegrationTestBase {
 
         mockMvc.perform(withJson(put("/api/profile/password"), token, json("currentPassword", "wrong-one", "newPassword", "newpass123")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Current password is incorrect."));
+                .andExpect(jsonPath("$.detail").value("Current password is incorrect."));
         login(email, PASSWORD);
 
         mockMvc.perform(withJson(put("/api/profile/password"), token, json("currentPassword", PASSWORD, "newPassword", "123")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.newPassword").value("Password must be at least 6 characters long"));
+                .andExpect(jsonPath("$.errors.newPassword").value("Password must be at least 6 characters long"));
 
         mockMvc.perform(withJson(put("/api/profile/password"), token, json("currentPassword", PASSWORD, "newPassword", "newpass123")))
                 .andExpect(status().isOk());
@@ -101,7 +101,7 @@ class ProfileIntegrationTest extends IntegrationTestBase {
 
         mockMvc.perform(auth(delete("/api/profile/courses/" + course), token))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("You are not enrolled in this course."));
+                .andExpect(jsonPath("$.detail").value("You are not enrolled in this course."));
         mockMvc.perform(auth(delete("/api/profile/courses/999999"), token))
                 .andExpect(status().isNotFound());
     }

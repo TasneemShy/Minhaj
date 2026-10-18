@@ -1,5 +1,6 @@
 package com.example.minhaj.controllers;
 
+import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.config.JwtUtil;
 import com.example.minhaj.dtos.LoginRequest;
 import com.example.minhaj.dtos.RegisterRequest;
@@ -41,7 +42,7 @@ public class AuthController {
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest request) {
 
         if (userRepository.findByEmail(request.email()).isPresent()) {
-            return ResponseEntity.badRequest().body("Error: Email is already registered!");
+            throw ApiException.conflict("Email is already registered!");
         }
 
         User user = new User();
@@ -65,7 +66,7 @@ public class AuthController {
             return ResponseEntity.ok(generateAuthResponse(userOptional.get(), "Login successful"));
         }
 
-        return ResponseEntity.status(401).body("Error: Invalid email or password!");
+        throw ApiException.unauthorized("Invalid email or password!");
     }
 
     private Map<String, String> generateAuthResponse(User user, String message) {
@@ -108,20 +109,20 @@ public class AuthController {
 
         // Same rule as RegisterRequest; a missing password used to fail with a 500
         if (newPassword == null || newPassword.isBlank() || newPassword.length() < 6) {
-            return ResponseEntity.badRequest().body("Error: Password must be at least 6 characters long");
+            throw ApiException.badRequest("Password must be at least 6 characters long");
         }
 
         Optional<PasswordResetToken> tokenOptional = tokenRepository.findByToken(token);
 
         if (tokenOptional.isEmpty()) {
-            return ResponseEntity.badRequest().body("Error: Invalid Token.");
+            throw ApiException.badRequest("Invalid Token.");
         }
 
         PasswordResetToken resetToken = tokenOptional.get();
 
         if (resetToken.isExpired()) {
             tokenRepository.delete(resetToken);
-            return ResponseEntity.badRequest().body("Error: Token has expired.");
+            throw ApiException.badRequest("Token has expired.");
         }
 
         User user = resetToken.getUser();

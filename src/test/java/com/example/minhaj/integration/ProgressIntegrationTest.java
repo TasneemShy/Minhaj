@@ -38,7 +38,7 @@ class ProgressIntegrationTest extends IntegrationTestBase {
     void cannotTrackProgressWithoutEnrolment() throws Exception {
         mockMvc.perform(auth(post(completeUrl(courseId, lesson1)), student))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.error").value("You must be enrolled in this course to track your progress."));
+                .andExpect(jsonPath("$.detail").value("You must be enrolled in this course to track your progress."));
         mockMvc.perform(auth(delete(completeUrl(courseId, lesson1)), student))
                 .andExpect(status().isForbidden());
         mockMvc.perform(auth(get("/api/courses/" + courseId + "/progress"), student))
@@ -103,7 +103,7 @@ class ProgressIntegrationTest extends IntegrationTestBase {
 
         mockMvc.perform(auth(post(completeUrl(courseId, foreignLesson)), student))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error").value("Lesson " + foreignLesson + " does not belong to course " + courseId));
+                .andExpect(jsonPath("$.detail").value("Lesson " + foreignLesson + " does not belong to course " + courseId));
         mockMvc.perform(auth(post(completeUrl(courseId, 999999L)), student))
                 .andExpect(status().isNotFound());
         mockMvc.perform(auth(post(completeUrl(999999L, lesson1)), student))

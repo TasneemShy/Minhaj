@@ -1,5 +1,6 @@
 package com.example.minhaj.controllers;
 
+import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.dtos.CourseProgressDTO;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Course;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -39,14 +39,14 @@ public class ProgressController {
     public ResponseEntity<?> completeLesson(@PathVariable Long courseId, @PathVariable Long lessonId, Principal principal) {
 
         if (principal == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "You must be logged in to track your progress."));
+            throw ApiException.unauthorized("You must be logged in to track your progress.");
         }
 
         User student = findStudent(principal);
         Course course = findCourse(courseId);
 
         if (!isEnrolled(student, courseId)) {
-            return ResponseEntity.status(403).body(Map.of("error", "You must be enrolled in this course to track your progress."));
+            throw ApiException.forbidden("You must be enrolled in this course to track your progress.");
         }
 
         Lesson lesson = findLessonInCourse(lessonId, courseId);
@@ -62,14 +62,14 @@ public class ProgressController {
     public ResponseEntity<?> uncompleteLesson(@PathVariable Long courseId, @PathVariable Long lessonId, Principal principal) {
 
         if (principal == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "You must be logged in to track your progress."));
+            throw ApiException.unauthorized("You must be logged in to track your progress.");
         }
 
         User student = findStudent(principal);
         Course course = findCourse(courseId);
 
         if (!isEnrolled(student, courseId)) {
-            return ResponseEntity.status(403).body(Map.of("error", "You must be enrolled in this course to track your progress."));
+            throw ApiException.forbidden("You must be enrolled in this course to track your progress.");
         }
 
         Lesson lesson = findLessonInCourse(lessonId, courseId);
@@ -84,14 +84,14 @@ public class ProgressController {
     public ResponseEntity<?> getCourseProgress(@PathVariable Long courseId, Principal principal) {
 
         if (principal == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "You must be logged in to view your progress."));
+            throw ApiException.unauthorized("You must be logged in to view your progress.");
         }
 
         User student = findStudent(principal);
         Course course = findCourse(courseId);
 
         if (!isEnrolled(student, courseId)) {
-            return ResponseEntity.status(403).body(Map.of("error", "You are not enrolled in this course."));
+            throw ApiException.forbidden("You are not enrolled in this course.");
         }
 
         return ResponseEntity.ok(buildProgress(student, course));
