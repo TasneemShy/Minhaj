@@ -4,6 +4,7 @@ import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Lesson;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.LessonRepository;
+import com.example.minhaj.services.CourseService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,10 +17,12 @@ public class LessonController {
 
     private final LessonRepository lessonRepository;
     private final CourseRepository courseRepository;
+    private final CourseService courseService;
 
-    public LessonController(LessonRepository lessonRepository, CourseRepository courseRepository) {
+    public LessonController(LessonRepository lessonRepository, CourseRepository courseRepository, CourseService courseService) {
         this.lessonRepository = lessonRepository;
         this.courseRepository = courseRepository;
+        this.courseService = courseService;
     }
 
     @GetMapping("/courses/{courseId}/lessons")
@@ -33,16 +36,8 @@ public class LessonController {
     @PostMapping("/admin/courses/{courseId}/lessons")
     public ResponseEntity<?> addLesson(@PathVariable Long courseId, @Valid @RequestBody Lesson lessonRequest) {
 
-        return courseRepository.findById(courseId).map(course -> {
-
-            lessonRequest.setCourse(course);
-            Lesson savedLesson = lessonRepository.save(lessonRequest);
-
-            course.setLessonCount(course.getLessonCount() + 1);
-            courseRepository.save(course);
-
-            return ResponseEntity.ok(savedLesson);
-
-        }).orElseGet(() -> ResponseEntity.notFound().build());
+        return courseRepository.findById(courseId)
+                .<ResponseEntity<?>>map(course -> ResponseEntity.ok(courseService.addLesson(course, lessonRequest)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

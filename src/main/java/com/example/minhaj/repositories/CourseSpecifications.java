@@ -13,7 +13,8 @@ public final class CourseSpecifications {
 
     // Builds a filter from the optional catalog query params; null params are ignored.
     public static Specification<Course> withFilters(String search, Long categoryId, Boolean free,
-                                                    Double minPrice, Double maxPrice, Double minRating) {
+                                                    Double minPrice, Double maxPrice, Double minRating,
+                                                    Long instructorId) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -22,6 +23,9 @@ public final class CourseSpecifications {
             }
             if (categoryId != null) {
                 predicates.add(cb.equal(root.get("category").get("id"), categoryId));
+            }
+            if (instructorId != null) {
+                predicates.add(cb.equal(root.get("instructor").get("id"), instructorId));
             }
             if (free != null) {
                 predicates.add(cb.equal(root.get("isFree"), free));

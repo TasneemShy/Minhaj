@@ -10,5 +10,7 @@ public record CourseDTO(
         int reviewCount,
         String imageUrl,
         Long categoryId,
-        String categoryName
+        String categoryName,
+        Long instructorId,
+        String instructorName
 ) {}

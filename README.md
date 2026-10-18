@@ -39,7 +39,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * User registration with BCrypt password hashing and a welcome email.
 * Login that issues a signed JWT (valid for 24 hours); tokens stay valid across restarts because the signing key comes from configuration.
 * Forgot-password flow: emails a one-time reset token valid for 15 minutes.
-* Role-based access control distinguishing students (`STUDENT`) from administrators (`ADMIN`).
+* Role-based access control with three roles: students (`STUDENT`, the default on registration), instructors (`INSTRUCTOR`), and administrators (`ADMIN`). Administrators assign roles.
 * User profile: view your account, update your name, change your password (current password required), and unenroll from courses (which also clears your progress in them).
 
 ### 2. Course Management
@@ -48,6 +48,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * Free and paid courses (free courses always have a price of `0`).
 * Paginated catalog browsing with case-insensitive search, filters (category, free/paid, price range, minimum rating), and sorting.
 * Courses can be grouped into categories that administrators manage.
+* Instructors create and manage their own courses and lessons; a course shows its instructor's ID and name (never their email).
 * Student enrollment and a "my courses" view.
 
 ### 3. Lessons
@@ -122,6 +123,7 @@ A Postman collection is also included in the `postman/` folder.
 | `free` | `free=true` | Only free (`true`) or paid (`false`) courses |
 | `minPrice`, `maxPrice` | `minPrice=10&maxPrice=50` | Price range (inclusive) |
 | `minRating` | `minRating=4` | Minimum average rating |
+| `instructorId` | `instructorId=3` | Only courses taught by this instructor |
 | `sortBy` | `sortBy=price` | `createdAt` (default), `title`, `price`, `averageRating`, or `reviewCount` |
 | `direction` | `direction=asc` | `asc` or `desc` (default) |
 
@@ -153,6 +155,18 @@ A Postman collection is also included in the `postman/` folder.
 | `DELETE` | `/api/courses/{courseId}/reviews/{reviewId}` | Delete a review | Review author or Admin |
 | `GET` | `/api/users/{userId}/reviews` | List a user's reviews, newest first (`?page=0&size=10`) | Authenticated |
 
+### Instructor (`/api/instructor`)
+
+Instructors can only modify their own courses (`403` otherwise); administrators can use these endpoints on any course.
+
+| HTTP Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `GET` | `/api/instructor/courses` | List my courses (paged with `page`, `size`) | Instructor, Admin |
+| `POST` | `/api/instructor/courses` | Create a course owned by me (set a category with `"category": {"id": 1}`) | Instructor, Admin |
+| `PUT` | `/api/instructor/courses/{id}` | Update my course | Instructor (owner), Admin |
+| `DELETE` | `/api/instructor/courses/{id}` | Delete my course | Instructor (owner), Admin |
+| `POST` | `/api/instructor/courses/{courseId}/lessons` | Add a lesson to my course | Instructor (owner), Admin |
+
 ### Administration (`/api/admin`)
 
 | HTTP Method | Endpoint | Description | Access |
@@ -162,9 +176,12 @@ A Postman collection is also included in the `postman/` folder.
 | `DELETE` | `/api/admin/courses/{id}` | Delete a course | Admin |
 | `POST` | `/api/admin/courses/{courseId}/lessons` | Add a lesson to a course | Admin |
 | `GET` | `/api/admin/users` | List all users (passwords never returned) | Admin |
+| `PUT` | `/api/admin/users/{id}/role` | Set a user's role (body: `{"role": "STUDENT" \| "INSTRUCTOR" \| "ADMIN"}`) | Admin |
 | `POST` | `/api/admin/categories` | Create a category | Admin |
 | `PUT` | `/api/admin/categories/{id}` | Rename or describe a category | Admin |
 | `DELETE` | `/api/admin/categories/{id}` | Delete a category (only if no courses use it) | Admin |
+
+> **Note:** the role is stored in the JWT, so a user whose role was changed keeps their old permissions until they log in again and get a new token.
 
 ### System
 

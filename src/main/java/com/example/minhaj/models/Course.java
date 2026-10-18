@@ -1,6 +1,8 @@
 package com.example.minhaj.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -96,4 +98,14 @@ public class Course {
 
     public Category getCategory() { return category; }
     public void setCategory(Category category) { this.category = category; }
+
+    // Owning instructor (null for courses created by an admin). Set by the server, never from the request body.
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "instructor_id")
+    @JsonIgnoreProperties({"email", "role", "password"})
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private User instructor;
+
+    public User getInstructor() { return instructor; }
+    public void setInstructor(User instructor) { this.instructor = instructor; }
 }
