@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: minhaj-db
+    environment:
+      POSTGRES_DB: minhaj_db
+      POSTGRES_USER: tasneem
+      POSTGRES_PASSWORD: root
+    ports:
+      - "5433:5432"
+    volumes:
+      - minhaj_new_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tasneem -d minhaj_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: minhaj-backend:latest
+    container_name: minhaj-app
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/minhaj_db
+      - SPRING_DATASOURCE_USERNAME=tasneem
+      - SPRING_DATASOURCE_PASSWORD=root
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  minhaj_new_postgres_data:
