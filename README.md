@@ -40,6 +40,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * Login that issues a signed JWT (valid for 24 hours); tokens stay valid across restarts because the signing key comes from configuration.
 * Forgot-password flow: emails a one-time reset token valid for 15 minutes.
 * Role-based access control distinguishing students (`STUDENT`) from administrators (`ADMIN`).
+* User profile: view your account, update your name, change your password (current password required), and unenroll from courses (which also clears your progress in them).
 
 ### 2. Course Management
 
@@ -122,6 +123,15 @@ A Postman collection is also included in the `postman/` folder.
 | `minRating` | `minRating=4` | Minimum average rating |
 | `sortBy` | `sortBy=price` | `createdAt` (default), `title`, `price`, `averageRating`, or `reviewCount` |
 | `direction` | `direction=asc` | `asc` or `desc` (default) |
+
+### Profile (`/api/profile`)
+
+| HTTP Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `GET` | `/api/profile` | Get the current user (`id`, `name`, `email`, `role`) | Authenticated |
+| `PUT` | `/api/profile` | Update your name (body: `{"name"}`); email and role can't be changed here | Authenticated |
+| `PUT` | `/api/profile/password` | Change your password (body: `{"currentPassword", "newPassword"}`, new password at least 6 characters) | Authenticated |
+| `DELETE` | `/api/profile/courses/{courseId}` | Unenroll from a course and delete your progress in it | Authenticated |
 
 ### Learning Progress
 
