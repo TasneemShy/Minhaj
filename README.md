@@ -279,6 +279,11 @@ Prerequisites: JDK 25 and PostgreSQL running on port `5432` with a `minhaj_db` d
 ./mvnw test
 ```
 
+* **Docker must be running.** The integration tests start a throwaway `postgres:15-alpine` container with [Testcontainers](https://testcontainers.com/) (one container shared by the whole run); Flyway migrates it and Hibernate validates the schema, just like at startup.
+* **No local database and no `.env` are needed.** Tests run with the `test` profile (`src/test/resources/application-test.properties`), which supplies a test-only JWT secret and dummy mail settings; the mail sender is mocked, so no email is ever sent. Your local `minhaj_db` is never touched.
+* Integration tests (`src/test/java/.../integration`) drive the real API end to end through MockMvc with real security and JWTs; every test starts from empty tables. `@WebMvcTest` slice tests (`.../web`) and plain unit tests run without Docker.
+* Run one class with `./mvnw test -Dtest=ReviewIntegrationTest`.
+
 ### Database migrations
 
 The schema is managed by [Flyway](https://documentation.red-gate.com/flyway). Migrations live in `src/main/resources/db/migration` and run automatically on startup; Hibernate only validates the schema against the entities (`ddl-auto=validate`) and never changes it.
