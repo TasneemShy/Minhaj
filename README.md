@@ -24,8 +24,8 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * **DTO Pattern with Java Records:** Persistence entities are kept separate from API responses using Java `record` types (`CourseDTO`).
 * **Centralized Exception Handling:** `@ControllerAdvice` (`GlobalExceptionHandler`) turns validation failures and missing resources into structured JSON error responses.
 * **JPA Auditing:** Automatic `createdAt` / `updatedAt` timestamps (`@CreatedDate`, `@LastModifiedDate`).
-* **Pagination & Search:** Course listing uses Spring Data's `Pageable` and `Page` with case-insensitive title search.
-* **Entity Relationships:** Course → Lessons (one-to-many), Students ↔ Courses (many-to-many enrollment), Course → Reviews and User → Reviews (one-to-many).
+* **Pagination, Filtering & Sorting:** Course listing combines Spring Data's `Pageable` with JPA `Specification`s (`CourseSpecifications`) so any mix of search, category, price, and rating filters becomes a single query.
+* **Entity Relationships:** Category → Courses (one-to-many), Course → Lessons (one-to-many), Students ↔ Courses (many-to-many enrollment), Course → Reviews and User → Reviews (one-to-many), and per-student lesson completion records (`LessonProgress`).
 * **CORS:** Centralized CORS policy in `SecurityConfig` for frontend and mobile clients.
 * **Stateless JWT Security:** A request filter validates Bearer tokens and applies role-based route rules.
 * **Externalized Secrets:** Mail credentials and the JWT signing key are read from environment variables (or a local `.env` file) instead of being hard-coded.
@@ -45,7 +45,8 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 
 * Full CRUD for administrators to create, update, and delete courses.
 * Free and paid courses (free courses always have a price of `0`).
-* Paginated catalog browsing with case-insensitive search.
+* Paginated catalog browsing with case-insensitive search, filters (category, free/paid, price range, minimum rating), and sorting.
+* Courses can be grouped into categories that administrators manage.
 * Student enrollment and a "my courses" view.
 
 ### 3. Lessons
@@ -53,13 +54,18 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * Administrators can add lessons (title and video URL) to a course.
 * Anyone can list a course's lessons; the course's lesson count is tracked automatically.
 
-### 4. Reviews & Ratings
+### 4. Learning Progress
+
+* Enrolled students can mark lessons as complete (or undo it).
+* Progress is reported per course as completed/total lessons and a percentage, plus an overview across all enrolled courses.
+
+### 5. Reviews & Ratings
 
 * Logged-in users can review a course with a comment and rating, once per course.
 * Each course keeps a running average rating and review count.
 * Reviews can be listed per course or per user.
 
-### 5. Interactive API Documentation
+### 6. Interactive API Documentation
 
 * Automatically generated OpenAPI specification.
 * Swagger UI with JWT Bearer authentication support for testing in the browser.
@@ -97,11 +103,34 @@ A Postman collection is also included in the `postman/` folder.
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `GET` | `/api/courses` | List courses (supports `page`, `size`, `search`) | Public |
+| `GET` | `/api/courses` | List courses (filters and sorting below) | Public |
 | `GET` | `/api/courses/{id}` | Get a course's details | Public |
 | `GET` | `/api/courses/{courseId}/lessons` | List a course's lessons | Public |
 | `POST` | `/api/courses/{id}/enroll` | Enroll the current user in a course | Authenticated |
 | `GET` | `/api/my-courses` | List the current user's enrolled courses | Authenticated |
+| `GET` | `/api/categories` | List all categories | Public |
+
+#### Course list query parameters
+
+| Parameter | Example | Description |
+| --- | --- | --- |
+| `page`, `size` | `page=0&size=10` | Pagination (defaults `0` and `10`) |
+| `search` | `search=spring` | Case-insensitive title search |
+| `categoryId` | `categoryId=2` | Only courses in this category |
+| `free` | `free=true` | Only free (`true`) or paid (`false`) courses |
+| `minPrice`, `maxPrice` | `minPrice=10&maxPrice=50` | Price range (inclusive) |
+| `minRating` | `minRating=4` | Minimum average rating |
+| `sortBy` | `sortBy=price` | `createdAt` (default), `title`, `price`, `averageRating`, or `reviewCount` |
+| `direction` | `direction=asc` | `asc` or `desc` (default) |
+
+### Learning Progress
+
+| HTTP Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `POST` | `/api/courses/{courseId}/lessons/{lessonId}/complete` | Mark a lesson complete | Enrolled students |
+| `DELETE` | `/api/courses/{courseId}/lessons/{lessonId}/complete` | Mark a lesson not complete | Enrolled students |
+| `GET` | `/api/courses/{courseId}/progress` | Progress in one course | Enrolled students |
+| `GET` | `/api/my-courses/progress` | Progress across all enrolled courses | Authenticated |
 
 ### Reviews
 
@@ -115,11 +144,14 @@ A Postman collection is also included in the `postman/` folder.
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `POST` | `/api/admin/courses` | Create a course | Admin |
+| `POST` | `/api/admin/courses` | Create a course (set a category with `"category": {"id": 1}`) | Admin |
 | `PUT` | `/api/admin/courses/{id}` | Update a course | Admin |
 | `DELETE` | `/api/admin/courses/{id}` | Delete a course | Admin |
 | `POST` | `/api/admin/courses/{courseId}/lessons` | Add a lesson to a course | Admin |
 | `GET` | `/api/admin/users` | List all users (passwords never returned) | Admin |
+| `POST` | `/api/admin/categories` | Create a category | Admin |
+| `PUT` | `/api/admin/categories/{id}` | Rename or describe a category | Admin |
+| `DELETE` | `/api/admin/categories/{id}` | Delete a category (only if no courses use it) | Admin |
 
 ### System
 

@@ -8,5 +8,7 @@ public record CourseDTO(
         boolean isFree,
         double averageRating,
         int reviewCount,
-        String imageUrl
+        String imageUrl,
+        Long categoryId,
+        String categoryName
 ) {}
