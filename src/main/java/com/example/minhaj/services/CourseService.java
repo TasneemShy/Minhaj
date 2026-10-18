@@ -8,8 +8,11 @@ import com.example.minhaj.models.Lesson;
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.CategoryRepository;
 import com.example.minhaj.repositories.CourseRepository;
+import com.example.minhaj.repositories.LessonProgressRepository;
 import com.example.minhaj.repositories.LessonRepository;
+import com.example.minhaj.repositories.ReviewRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 // Course write logic shared by the admin endpoints and the instructor endpoints.
 @Service
@@ -18,12 +21,17 @@ public class CourseService {
     private final CourseRepository courseRepository;
     private final CategoryRepository categoryRepository;
     private final LessonRepository lessonRepository;
+    private final LessonProgressRepository lessonProgressRepository;
+    private final ReviewRepository reviewRepository;
 
     public CourseService(CourseRepository courseRepository, CategoryRepository categoryRepository,
-                         LessonRepository lessonRepository) {
+                         LessonRepository lessonRepository, LessonProgressRepository lessonProgressRepository,
+                         ReviewRepository reviewRepository) {
         this.courseRepository = courseRepository;
         this.categoryRepository = categoryRepository;
         this.lessonRepository = lessonRepository;
+        this.lessonProgressRepository = lessonProgressRepository;
+        this.reviewRepository = reviewRepository;
     }
 
     // The request sends the category as {"id": ...}; load the real entity so a bad ID fails with 404.
@@ -51,6 +59,18 @@ public class CourseService {
         existingCourse.setPrice(courseDetails.isFree() ? 0.0 : courseDetails.getPrice());
         existingCourse.setCategory(resolveCategory(courseDetails.getCategory()));
         return courseRepository.save(existingCourse);
+    }
+
+    // Removes everything that references the course first, otherwise Postgres rejects the delete
+    // on the foreign keys. Progress goes before lessons because it references lessons.
+    @Transactional
+    public void deleteCourse(Course course) {
+        Long courseId = course.getId();
+        lessonProgressRepository.deleteByCourseId(courseId);
+        lessonRepository.deleteByCourseId(courseId);
+        reviewRepository.deleteByCourseId(courseId);
+        courseRepository.deleteEnrollmentsByCourseId(courseId);
+        courseRepository.deleteById(courseId);
     }
 
     public Lesson addLesson(Course course, Lesson lesson) {

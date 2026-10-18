@@ -84,7 +84,7 @@ public class InstructorController {
 
     @DeleteMapping("/courses/{id}")
     public ResponseEntity<?> deleteCourse(@PathVariable Long id, Authentication authentication) {
-        courseRepository.delete(findOwnedCourse(id, authentication));
+        courseService.deleteCourse(findOwnedCourse(id, authentication));
         return ResponseEntity.ok(Map.of("message", "Course deleted successfully!"));
     }
 

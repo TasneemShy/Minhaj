@@ -92,7 +92,7 @@ public class CourseController {
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cannot delete. Course not found with ID: " + id));
 
-        courseRepository.delete(course);
+        courseService.deleteCourse(course);
         return ResponseEntity.ok(Map.of("message", "Course deleted successfully!"));
     }
 
