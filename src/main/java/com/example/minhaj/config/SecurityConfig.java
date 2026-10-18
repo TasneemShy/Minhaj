@@ -1,5 +1,6 @@
 package com.example.minhaj.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -18,8 +19,24 @@ public class SecurityConfig {
 
     private final JwtRequestFilter jwtRequestFilter;
 
-    public SecurityConfig(JwtRequestFilter jwtRequestFilter) {
+    private final List<String> allowedOrigins;
+
+    public SecurityConfig(JwtRequestFilter jwtRequestFilter,
+                          @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         this.jwtRequestFilter = jwtRequestFilter;
+        this.allowedOrigins = allowedOrigins.stream()
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList();
+        if (this.allowedOrigins.isEmpty()) {
+            throw new IllegalStateException(
+                    "app.cors.allowed-origins (CORS_ALLOWED_ORIGINS) must list at least one origin");
+        }
+        if (this.allowedOrigins.stream().anyMatch(origin -> origin.contains("*"))) {
+            throw new IllegalStateException(
+                    "app.cors.allowed-origins (CORS_ALLOWED_ORIGINS) must not contain wildcards ('*'); "
+                            + "list the exact origins instead, e.g. https://app.example.com");
+        }
     }
 
     @Bean
@@ -47,9 +64,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("*")); // مسموح لأي تطبيق يتصل
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        // The JWT travels in the Authorization header, not in cookies.
+        configuration.setAllowCredentials(false);
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

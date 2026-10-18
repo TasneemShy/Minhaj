@@ -31,7 +31,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * **JPA Auditing:** Automatic `createdAt` / `updatedAt` timestamps (`@CreatedDate`, `@LastModifiedDate`).
 * **Pagination, Filtering & Sorting:** Course listing combines Spring Data's `Pageable` with JPA `Specification`s (`CourseSpecifications`) so any mix of search, category, price, and rating filters becomes a single query.
 * **Entity Relationships:** Category → Courses (one-to-many), Course → Lessons (one-to-many), Students ↔ Courses (many-to-many enrollment), Course → Reviews and User → Reviews (one-to-many), and per-student lesson completion records (`LessonProgress`).
-* **CORS:** Centralized CORS policy in `SecurityConfig` for frontend and mobile clients.
+* **CORS:** Origin allow-list (`CORS_ALLOWED_ORIGINS`) configured in `SecurityConfig`; wildcards are rejected.
 * **Stateless JWT Security:** A request filter validates Bearer tokens and applies role-based route rules.
 * **Externalized Secrets:** Mail credentials and the JWT signing key are read from environment variables (or a local `.env` file) instead of being hard-coded.
 
@@ -238,7 +238,10 @@ cp .env.example .env
 MAIL_USERNAME=your-mailtrap-username
 MAIL_PASSWORD=your-mailtrap-password
 JWT_SECRET=your-base64-jwt-secret
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
+
+`CORS_ALLOWED_ORIGINS` is a comma-separated list of the exact browser origins allowed to call the API (optional; defaults to the local React/Vite dev servers shown above). Set it to your frontend's URL in production, e.g. `https://app.example.com`. A `*` wildcard is rejected and the app refuses to start.
 
 Generate a JWT secret (a base64-encoded 256-bit key) with:
 
