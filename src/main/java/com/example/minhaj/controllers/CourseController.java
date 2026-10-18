@@ -1,13 +1,12 @@
 package com.example.minhaj.controllers;
 
 import com.example.minhaj.exceptions.ResourceNotFoundException;
-import com.example.minhaj.models.Category;
 import com.example.minhaj.models.Course;
 import com.example.minhaj.models.User;
-import com.example.minhaj.repositories.CategoryRepository;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.CourseSpecifications;
 import com.example.minhaj.repositories.UserRepository;
+import com.example.minhaj.services.CourseService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -29,21 +28,12 @@ public class CourseController {
 
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
-    private final CategoryRepository categoryRepository;
+    private final CourseService courseService;
 
-    public CourseController(CourseRepository courseRepository, UserRepository userRepository, CategoryRepository categoryRepository) {
+    public CourseController(CourseRepository courseRepository, UserRepository userRepository, CourseService courseService) {
         this.courseRepository = courseRepository;
         this.userRepository = userRepository;
-        this.categoryRepository = categoryRepository;
-    }
-
-    // The request sends the category as {"id": ...}; load the real entity so a bad ID fails with 404.
-    private Category resolveCategory(Category requested) {
-        if (requested == null || requested.getId() == null) {
-            return null;
-        }
-        return categoryRepository.findById(requested.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Category not found with ID: " + requested.getId()));
+        this.courseService = courseService;
     }
 
     @GetMapping("/courses")
@@ -56,6 +46,7 @@ public class CourseController {
             @RequestParam(required = false) Double minPrice,
             @RequestParam(required = false) Double maxPrice,
             @RequestParam(required = false) Double minRating,
+            @RequestParam(required = false) Long instructorId,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String direction) {
 
@@ -67,20 +58,9 @@ public class CourseController {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Course> courses = courseRepository.findAll(
-                CourseSpecifications.withFilters(search, categoryId, free, minPrice, maxPrice, minRating), pageable);
+                CourseSpecifications.withFilters(search, categoryId, free, minPrice, maxPrice, minRating, instructorId), pageable);
 
-        Page<CourseDTO> courseDTOs = courses.map(course -> new CourseDTO(
-                course.getId(),
-                course.getTitle(),
-                course.getDescription(),
-                course.getPrice(),
-                course.isFree(),
-                course.getAverageRating(),
-                course.getReviewCount(),
-                course.getImageUrl(),
-                course.getCategory() != null ? course.getCategory().getId() : null,
-                course.getCategory() != null ? course.getCategory().getName() : null
-        ));
+        Page<CourseDTO> courseDTOs = courses.map(CourseService::toDTO);
 
         return ResponseEntity.ok(courseDTOs);
     }
@@ -94,11 +74,7 @@ public class CourseController {
 
     @PostMapping("/admin/courses")
     public Course createCourse(@Valid @RequestBody Course course) {
-        if (course.isFree()) {
-            course.setPrice(0.0);
-        }
-        course.setCategory(resolveCategory(course.getCategory()));
-        return courseRepository.save(course);
+        return courseService.create(course, null);
     }
 
     @PutMapping("/admin/courses/{id}")
@@ -107,14 +83,7 @@ public class CourseController {
         Course existingCourse = courseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cannot update. Course not found with ID: " + id));
 
-        existingCourse.setTitle(courseDetails.getTitle());
-        existingCourse.setDescription(courseDetails.getDescription());
-        existingCourse.setFree(courseDetails.isFree());
-        existingCourse.setPrice(courseDetails.isFree() ? 0.0 : courseDetails.getPrice());
-        existingCourse.setCategory(resolveCategory(courseDetails.getCategory()));
-
-        Course updatedCourse = courseRepository.save(existingCourse);
-        return ResponseEntity.ok(updatedCourse);
+        return ResponseEntity.ok(courseService.update(existingCourse, courseDetails));
     }
 
     @DeleteMapping("/admin/courses/{id}")
