@@ -1,6 +1,7 @@
 package com.example.minhaj.controllers;
 
 import com.example.minhaj.config.JwtUtil;
+import com.example.minhaj.dtos.LoginRequest;
 import com.example.minhaj.dtos.RegisterRequest;
 import com.example.minhaj.models.PasswordResetToken;
 import com.example.minhaj.models.User;
@@ -56,11 +57,11 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> loginUser(@RequestBody User loginRequest) {
-        var userOptional = userRepository.findByEmail(loginRequest.getEmail());
+    public ResponseEntity<?> loginUser(@Valid @RequestBody LoginRequest loginRequest) {
+        var userOptional = userRepository.findByEmail(loginRequest.email());
 
         if (userOptional.isPresent()
-                && passwordEncoder.matches(loginRequest.getPassword(), userOptional.get().getPassword())) {
+                && passwordEncoder.matches(loginRequest.password(), userOptional.get().getPassword())) {
             return ResponseEntity.ok(generateAuthResponse(userOptional.get(), "Login successful"));
         }
 
