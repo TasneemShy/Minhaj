@@ -1,5 +1,6 @@
 package com.example.minhaj.controllers;
 
+import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Course;
 import com.example.minhaj.models.User;
@@ -51,7 +52,7 @@ public class CourseController {
             @RequestParam(defaultValue = "desc") String direction) {
 
         if (!SORTABLE_FIELDS.contains(sortBy)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "sortBy must be one of: " + String.join(", ", SORTABLE_FIELDS)));
+            throw ApiException.badRequest("sortBy must be one of: " + String.join(", ", SORTABLE_FIELDS));
         }
 
         Sort sort = Sort.by("asc".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
@@ -100,7 +101,7 @@ public class CourseController {
     public ResponseEntity<?> enrollInCourse(@PathVariable Long id, java.security.Principal principal) {
 
         if (principal == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "You must be logged in to enroll in a course."));
+            throw ApiException.unauthorized("You must be logged in to enroll in a course.");
         }
 
         String studentEmail = principal.getName();
@@ -120,7 +121,7 @@ public class CourseController {
     public ResponseEntity<?> getMyCourses(java.security.Principal principal) {
 
         if (principal == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "You must be logged in to view your courses."));
+            throw ApiException.unauthorized("You must be logged in to view your courses.");
         }
 
         String studentEmail = principal.getName();

@@ -1,5 +1,6 @@
 package com.example.minhaj.controllers;
 
+import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Course;
 import com.example.minhaj.models.Review;
@@ -39,7 +40,7 @@ public class ReviewController {
                                                 @RequestParam(defaultValue = "0") int page,
                                                 @RequestParam(defaultValue = "10") int size){
         if (page < 0 || size < 1) {
-            return ResponseEntity.badRequest().body(Map.of("error", "page must be >= 0 and size must be >= 1."));
+            throw ApiException.badRequest("page must be >= 0 and size must be >= 1.");
         }
         if(!courseRepository.existsById(courseId)){
 
@@ -54,7 +55,7 @@ public class ReviewController {
                                               @RequestParam(defaultValue = "0") int page,
                                               @RequestParam(defaultValue = "10") int size){
         if (page < 0 || size < 1) {
-            return ResponseEntity.badRequest().body(Map.of("error", "page must be >= 0 and size must be >= 1."));
+            throw ApiException.badRequest("page must be >= 0 and size must be >= 1.");
         }
         if(!userRepository.existsById(userId)){
 
@@ -68,7 +69,7 @@ public class ReviewController {
     public ResponseEntity<?> addReview(@PathVariable Long courseId, @Valid @RequestBody Review reviewRequest, java.security.Principal principal){
 
         if (principal == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "You must be logged in to leave a review."));
+            throw ApiException.unauthorized("You must be logged in to leave a review.");
         }
 
         String userEmail = principal.getName();
@@ -79,7 +80,7 @@ public class ReviewController {
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + courseId));
 
         if (reviewRepository.existsByCourseIdAndUserId(courseId, student.getId())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "You have already reviewed this course."));
+            throw ApiException.badRequest("You have already reviewed this course.");
         }
 
         // Never let a client-supplied id turn this insert into an update of someone else's review.
@@ -98,14 +99,14 @@ public class ReviewController {
                                           @Valid @RequestBody Review reviewRequest, java.security.Principal principal){
 
         if (principal == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "You must be logged in to edit a review."));
+            throw ApiException.unauthorized("You must be logged in to edit a review.");
         }
 
         Review review = reviewRepository.findByIdAndCourseId(reviewId, courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Review not found with ID: " + reviewId + " in course " + courseId));
 
         if (!review.getUser().getEmail().equals(principal.getName())) {
-            return ResponseEntity.status(403).body(Map.of("error", "You can only edit your own review."));
+            throw ApiException.forbidden("You can only edit your own review.");
         }
 
         review.setComment(reviewRequest.getComment());
@@ -121,7 +122,7 @@ public class ReviewController {
     public ResponseEntity<?> deleteReview(@PathVariable Long courseId, @PathVariable Long reviewId, Authentication authentication){
 
         if (authentication == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "You must be logged in to delete a review."));
+            throw ApiException.unauthorized("You must be logged in to delete a review.");
         }
 
         Review review = reviewRepository.findByIdAndCourseId(reviewId, courseId)
@@ -132,7 +133,7 @@ public class ReviewController {
                 .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
 
         if (!isAuthor && !isAdmin) {
-            return ResponseEntity.status(403).body(Map.of("error", "You can only delete your own review."));
+            throw ApiException.forbidden("You can only delete your own review.");
         }
 
         Course course = review.getCourse();

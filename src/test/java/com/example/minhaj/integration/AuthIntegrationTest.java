@@ -5,6 +5,7 @@ import com.example.minhaj.repositories.PasswordResetTokenRepository;
 import com.example.minhaj.support.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.mail.SimpleMailMessage;
 
 import java.time.LocalDateTime;
@@ -49,27 +50,45 @@ class AuthIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void protectedEndpointWithoutOrWithBadTokenIsRejected() throws Exception {
-        mockMvc.perform(get("/api/profile")).andExpect(status().isForbidden());
-        mockMvc.perform(auth(get("/api/profile"), "not-a-jwt")).andExpect(status().isForbidden());
+    void protectedEndpointWithoutOrWithBadTokenIs401ProblemDetail() throws Exception {
+        mockMvc.perform(get("/api/profile"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.title").value("Unauthorized"))
+                .andExpect(jsonPath("$.detail").value("Authentication is required to access this resource."))
+                .andExpect(jsonPath("$.instance").value("/api/profile"));
+        mockMvc.perform(auth(get("/api/profile"), "not-a-jwt"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
     }
 
     @Test
-    void registerRejectsDuplicateEmail() throws Exception {
+    void registerRejectsDuplicateEmailWith409() throws Exception {
         String email = uniqueEmail("dup");
         studentToken(email);
 
         mockMvc.perform(withJson(post("/api/auth/register"), null, json("name", "Again", "email", email, "password", PASSWORD)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.title").value("Conflict"))
+                .andExpect(jsonPath("$.detail").value("Email is already registered!"))
+                .andExpect(jsonPath("$.instance").value("/api/auth/register"));
     }
 
     @Test
     void registerValidatesBody() throws Exception {
         mockMvc.perform(withJson(post("/api/auth/register"), null, json("name", "", "email", "nope", "password", "123")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.name").exists())
-                .andExpect(jsonPath("$.email").value("Invalid email format"))
-                .andExpect(jsonPath("$.password").value("Password must be at least 6 characters long"));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("Bad Request"))
+                .andExpect(jsonPath("$.detail").value("Request validation failed."))
+                .andExpect(jsonPath("$.instance").value("/api/auth/register"))
+                .andExpect(jsonPath("$.errors.name").exists())
+                .andExpect(jsonPath("$.errors.email").value("Invalid email format"))
+                .andExpect(jsonPath("$.errors.password").value("Password must be at least 6 characters long"));
     }
 
     @Test
@@ -140,7 +159,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
 
         mockMvc.perform(withJson(post("/api/auth/reset-password"), null, json("token", token, "newPassword", "123")))
                 .andExpect(status().isBadRequest())
-                .andExpect(content().string("Error: Password must be at least 6 characters long"));
+                .andExpect(jsonPath("$.detail").value("Password must be at least 6 characters long"));
         mockMvc.perform(withJson(post("/api/auth/reset-password"), null, json("token", token)))
                 .andExpect(status().isBadRequest());
 
@@ -153,7 +172,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
     void resetPasswordRejectsUnknownAndExpiredTokens() throws Exception {
         mockMvc.perform(withJson(post("/api/auth/reset-password"), null, json("token", "made-up", "newPassword", "whatever1")))
                 .andExpect(status().isBadRequest())
-                .andExpect(content().string("Error: Invalid Token."));
+                .andExpect(jsonPath("$.detail").value("Invalid Token."));
 
         String email = uniqueEmail("expired");
         studentToken(email);
@@ -163,7 +182,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
 
         mockMvc.perform(withJson(post("/api/auth/reset-password"), null, json("token", "expired-token", "newPassword", "whatever1")))
                 .andExpect(status().isBadRequest())
-                .andExpect(content().string("Error: Token has expired."));
+                .andExpect(jsonPath("$.detail").value("Token has expired."));
         assertThat(tokenRepository.count()).isZero();
         login(email, PASSWORD);
     }
