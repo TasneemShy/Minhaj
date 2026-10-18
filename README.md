@@ -62,9 +62,10 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 
 ### 5. Reviews & Ratings
 
-* Logged-in users can review a course with a comment and rating, once per course.
-* Each course keeps a running average rating and review count.
-* Reviews can be listed per course or per user.
+* Logged-in users can review a course with a comment and rating (1–5), once per course.
+* Authors can edit their own review; the author or an admin can delete it.
+* Each course's average rating (rounded to one decimal) and review count are recalculated from the database after every create, edit, and delete.
+* Reviews can be listed per course or per user, paginated (`page`, `size`; defaults `0`/`10`) and sorted newest first.
 
 ### 6. Interactive API Documentation
 
@@ -146,9 +147,11 @@ A Postman collection is also included in the `postman/` folder.
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `GET` | `/api/courses/{courseId}/reviews` | List a course's reviews | Public |
+| `GET` | `/api/courses/{courseId}/reviews` | List a course's reviews, newest first (`?page=0&size=10`) | Public |
 | `POST` | `/api/courses/{courseId}/reviews` | Review a course (body: `{"comment", "rating"}`) | Authenticated |
-| `GET` | `/api/users/{userId}/reviews` | List a user's reviews | Authenticated |
+| `PUT` | `/api/courses/{courseId}/reviews/{reviewId}` | Edit your review (body: `{"comment", "rating"}`) | Review author |
+| `DELETE` | `/api/courses/{courseId}/reviews/{reviewId}` | Delete a review | Review author or Admin |
+| `GET` | `/api/users/{userId}/reviews` | List a user's reviews, newest first (`?page=0&size=10`) | Authenticated |
 
 ### Administration (`/api/admin`)
 

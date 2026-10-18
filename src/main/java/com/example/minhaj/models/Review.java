@@ -2,13 +2,17 @@ package com.example.minhaj.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
 @Table(name = "reviews")
+@EntityListeners(AuditingEntityListener.class)
 public class Review {
 
     @Id
@@ -33,6 +37,11 @@ public class Review {
     @JsonIgnoreProperties({"email", "role", "password"})
     private User user;
 
+    @CreatedDate
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    @Column(updatable = false)
+    private java.time.LocalDateTime createdAt;
+
     public Long getId() { return id; }
     public void setId(Long id){ this.id = id; }
 
@@ -47,5 +56,8 @@ public class Review {
 
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }
+
+    public java.time.LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(java.time.LocalDateTime createdAt) { this.createdAt = createdAt; }
 
 }
