@@ -1,5 +1,6 @@
 package com.example.minhaj.controllers;
 
+import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.dtos.UserDTO;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.User;
@@ -38,7 +39,7 @@ public class UserController {
     public ResponseEntity<?> updateUserRole(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String role = body.get("role");
         if (role == null || !ROLES.contains(role)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "role must be one of: " + String.join(", ", ROLES)));
+            throw ApiException.badRequest("role must be one of: " + String.join(", ", ROLES));
         }
 
         User user = userRepository.findById(id)

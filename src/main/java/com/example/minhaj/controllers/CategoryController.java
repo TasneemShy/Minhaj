@@ -1,5 +1,6 @@
 package com.example.minhaj.controllers;
 
+import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Category;
 import com.example.minhaj.repositories.CategoryRepository;
@@ -32,7 +33,7 @@ public class CategoryController {
     @PostMapping("/admin/categories")
     public ResponseEntity<?> createCategory(@Valid @RequestBody Category category) {
         if (categoryRepository.existsByNameIgnoreCase(category.getName())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "A category with this name already exists."));
+            throw ApiException.badRequest("A category with this name already exists.");
         }
         category.setId(null);
         return ResponseEntity.ok(categoryRepository.save(category));
@@ -45,7 +46,7 @@ public class CategoryController {
 
         if (!category.getName().equalsIgnoreCase(categoryDetails.getName())
                 && categoryRepository.existsByNameIgnoreCase(categoryDetails.getName())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "A category with this name already exists."));
+            throw ApiException.badRequest("A category with this name already exists.");
         }
 
         category.setName(categoryDetails.getName());
@@ -59,7 +60,7 @@ public class CategoryController {
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found with ID: " + id));
 
         if (courseRepository.existsByCategoryId(id)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Cannot delete a category that still has courses. Move or delete those courses first."));
+            throw ApiException.badRequest("Cannot delete a category that still has courses. Move or delete those courses first.");
         }
 
         categoryRepository.delete(category);

@@ -86,7 +86,7 @@ class InstructorIntegrationTest extends IntegrationTestBase {
 
         mockMvc.perform(withJson(put("/api/instructor/courses/" + alicesCourse), bob, courseJson("Stolen", false, 1, null)))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.error").value("You can only manage your own courses."));
+                .andExpect(jsonPath("$.detail").value("You can only manage your own courses."));
         mockMvc.perform(withJson(post("/api/instructor/courses/" + alicesCourse + "/lessons"), bob, json("title", "Spam")))
                 .andExpect(status().isForbidden());
         mockMvc.perform(auth(delete("/api/instructor/courses/" + alicesCourse), bob))

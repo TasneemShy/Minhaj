@@ -18,12 +18,14 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtRequestFilter jwtRequestFilter;
+    private final SecurityProblemHandler securityProblemHandler;
 
     private final List<String> allowedOrigins;
 
-    public SecurityConfig(JwtRequestFilter jwtRequestFilter,
+    public SecurityConfig(JwtRequestFilter jwtRequestFilter, SecurityProblemHandler securityProblemHandler,
                           @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         this.jwtRequestFilter = jwtRequestFilter;
+        this.securityProblemHandler = securityProblemHandler;
         this.allowedOrigins = allowedOrigins.stream()
                 .map(String::trim)
                 .filter(origin -> !origin.isEmpty())
@@ -57,6 +59,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**", "/api/health", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(securityProblemHandler).accessDeniedHandler(securityProblemHandler))
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

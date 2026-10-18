@@ -1,5 +1,6 @@
 package com.example.minhaj.controllers;
 
+import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.dtos.AnalyticsOverviewDTO;
 import com.example.minhaj.dtos.CategoryAnalyticsDTO;
 import com.example.minhaj.dtos.CourseAnalyticsDTO;
@@ -67,10 +68,10 @@ public class AnalyticsController {
                                            @RequestParam(defaultValue = "5") int limit) {
 
         if (!TOP_COURSE_ORDERS.contains(by)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "by must be one of: " + String.join(", ", TOP_COURSE_ORDERS)));
+            throw ApiException.badRequest("by must be one of: " + String.join(", ", TOP_COURSE_ORDERS));
         }
         if (limit < 1 || limit > 50) {
-            return ResponseEntity.badRequest().body(Map.of("error", "limit must be between 1 and 50"));
+            throw ApiException.badRequest("limit must be between 1 and 50");
         }
 
         Pageable pageable = PageRequest.of(0, limit);

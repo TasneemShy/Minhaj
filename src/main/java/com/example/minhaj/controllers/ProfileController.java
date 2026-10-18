@@ -1,5 +1,6 @@
 package com.example.minhaj.controllers;
 
+import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.dtos.ChangePasswordRequest;
 import com.example.minhaj.dtos.UpdateProfileRequest;
 import com.example.minhaj.dtos.UserDTO;
@@ -53,7 +54,7 @@ public class ProfileController {
         User user = findCurrentUser(principal);
 
         if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Current password is incorrect."));
+            throw ApiException.badRequest("Current password is incorrect.");
         }
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
@@ -71,7 +72,7 @@ public class ProfileController {
 
         boolean removed = user.getEnrolledCourses().removeIf(enrolled -> enrolled.getId().equals(courseId));
         if (!removed) {
-            return ResponseEntity.badRequest().body(Map.of("error", "You are not enrolled in this course."));
+            throw ApiException.badRequest("You are not enrolled in this course.");
         }
 
         userRepository.save(user);

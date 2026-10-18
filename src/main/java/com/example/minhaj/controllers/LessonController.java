@@ -38,6 +38,6 @@ public class LessonController {
 
         return courseRepository.findById(courseId)
                 .<ResponseEntity<?>>map(course -> ResponseEntity.ok(courseService.addLesson(course, lessonRequest)))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + courseId));
     }
 }

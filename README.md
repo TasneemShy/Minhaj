@@ -27,7 +27,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 ## Architectural Highlights
 
 * **DTO Pattern with Java Records:** Persistence entities are kept separate from API responses using Java `record` types (`CourseDTO`).
-* **Centralized Exception Handling:** `@ControllerAdvice` (`GlobalExceptionHandler`) turns validation failures and missing resources into structured JSON error responses.
+* **Centralized Exception Handling:** `@RestControllerAdvice` (`GlobalExceptionHandler`) and Spring Security's entry point / access-denied handler return every error as RFC 9457 Problem Details (see [Error format](#error-format)).
 * **JPA Auditing:** Automatic `createdAt` / `updatedAt` timestamps (`@CreatedDate`, `@LastModifiedDate`).
 * **Pagination, Filtering & Sorting:** Course listing combines Spring Data's `Pageable` with JPA `Specification`s (`CourseSpecifications`) so any mix of search, category, price, and rating filters becomes a single query.
 * **Entity Relationships:** Category → Courses (one-to-many), Course → Lessons (one-to-many), Students ↔ Courses (many-to-many enrollment), Course → Reviews and User → Reviews (one-to-many), and per-student lesson completion records (`LessonProgress`).
@@ -214,6 +214,26 @@ Instructors can only modify their own courses (`403` otherwise); administrators 
 | `GET` | `/actuator/info` | Application name, description, version and build info | Public |
 
 Only `health` and `info` are exposed over HTTP; all other actuator endpoints are disabled on the web. The mail health check is turned off, so a Mailtrap outage never marks the app as down.
+
+### Error format
+
+Every error response uses [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457) with content type `application/problem+json`: `type`, `title` (the HTTP reason phrase), `status`, `detail` (a human-readable message) and `instance` (the request path). Validation failures add an `errors` object mapping each invalid field to its message:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "Request validation failed.",
+  "instance": "/api/auth/register",
+  "errors": {
+    "email": "Invalid email format",
+    "password": "Password must be at least 6 characters long"
+  }
+}
+```
+
+Common statuses: `400` invalid input, `401` missing/invalid token or wrong login, `403` authenticated but not allowed, `404` not found, `409` email already registered, `500` unexpected error (the detail never includes internal exception messages).
 
 ---
 

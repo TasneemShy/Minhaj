@@ -3,6 +3,7 @@ package com.example.minhaj.integration;
 import com.example.minhaj.support.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -12,6 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -93,7 +95,7 @@ class CourseIntegrationTest extends IntegrationTestBase {
     void rejectsUnknownSortField() throws Exception {
         list("?sortBy=password")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error", containsString("sortBy must be one of")));
+                .andExpect(jsonPath("$.detail", containsString("sortBy must be one of")));
     }
 
     @Test
@@ -104,7 +106,7 @@ class CourseIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.title").value("Lonely"));
         mockMvc.perform(get("/api/courses/999999"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error", containsString("999999")));
+                .andExpect(jsonPath("$.detail", containsString("999999")));
     }
 
     @Test
@@ -133,15 +135,15 @@ class CourseIntegrationTest extends IntegrationTestBase {
     void createCourseValidatesBodyAndCategory() throws Exception {
         mockMvc.perform(withJson(post("/api/admin/courses"), admin, "{\"title\":\"\",\"price\":-1}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.title").value("Course title cannot be empty"))
-                .andExpect(jsonPath("$.price").value("Price cannot be negative"));
+                .andExpect(jsonPath("$.errors.title").value("Course title cannot be empty"))
+                .andExpect(jsonPath("$.errors.price").value("Price cannot be negative"));
 
         mockMvc.perform(withJson(post("/api/admin/courses"), admin, courseJson("Bad category", false, 1, 424242L)))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    void studentsAndAnonymousAreForbiddenOnAdminEndpoints() throws Exception {
+    void studentsAreForbiddenOnAdminEndpoints() throws Exception {
         String student = studentToken();
         Long courseId = createCourse(admin, "Protected", false, 1, null);
 
@@ -151,7 +153,38 @@ class CourseIntegrationTest extends IntegrationTestBase {
         mockMvc.perform(withJson(post("/api/admin/categories"), student, json("name", "Hack"))).andExpect(status().isForbidden());
         mockMvc.perform(auth(get("/api/admin/users"), student)).andExpect(status().isForbidden());
         mockMvc.perform(auth(get("/api/admin/analytics/overview"), student)).andExpect(status().isForbidden());
-        mockMvc.perform(get("/api/admin/users")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void studentOnAdminEndpointGets403ProblemDetail() throws Exception {
+        mockMvc.perform(auth(get("/api/admin/users"), studentToken()))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value("about:blank"))
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.title").value("Forbidden"))
+                .andExpect(jsonPath("$.detail").value("Access Denied"))
+                .andExpect(jsonPath("$.instance").value("/api/admin/users"));
+    }
+
+    @Test
+    void anonymousOnAdminEndpointGets401() throws Exception {
+        mockMvc.perform(get("/api/admin/users"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void missingCourseIs404ProblemDetail() throws Exception {
+        mockMvc.perform(get("/api/courses/999999"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value("about:blank"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.title").value("Not Found"))
+                .andExpect(jsonPath("$.detail").value("Course not found with ID: 999999"))
+                .andExpect(jsonPath("$.instance").value("/api/courses/999999"))
+                .andExpect(jsonPath("$.error").doesNotExist());
     }
 
     @Test
@@ -162,7 +195,7 @@ class CourseIntegrationTest extends IntegrationTestBase {
 
         mockMvc.perform(withJson(post("/api/admin/categories"), admin, json("name", "design")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error", containsString("already exists")));
+                .andExpect(jsonPath("$.detail", containsString("already exists")));
 
         mockMvc.perform(withJson(put("/api/admin/categories/" + design), admin, json("name", "UI Design", "description", "Pixels")))
                 .andExpect(status().isOk())
@@ -173,7 +206,7 @@ class CourseIntegrationTest extends IntegrationTestBase {
     void categoryDeleteIsRefusedWhileInUse() throws Exception {
         mockMvc.perform(auth(delete("/api/admin/categories/" + design), admin))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error", containsString("still has courses")));
+                .andExpect(jsonPath("$.detail", containsString("still has courses")));
 
         Long empty = createCategory(admin, "Empty");
         mockMvc.perform(auth(delete("/api/admin/categories/" + empty), admin)).andExpect(status().isOk());

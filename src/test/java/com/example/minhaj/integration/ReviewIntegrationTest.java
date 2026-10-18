@@ -64,7 +64,7 @@ class ReviewIntegrationTest extends IntegrationTestBase {
 
         mockMvc.perform(withJson(post(reviewsUrl()), student, "{\"rating\":3,\"comment\":\"second\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("You have already reviewed this course."));
+                .andExpect(jsonPath("$.detail").value("You have already reviewed this course."));
         expectRating(5.0, 1);
     }
 
@@ -73,13 +73,13 @@ class ReviewIntegrationTest extends IntegrationTestBase {
         String student = studentToken();
         mockMvc.perform(withJson(post(reviewsUrl()), student, "{\"rating\":0,\"comment\":\"bad\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.rating").value("Rating must be at least 1"));
+                .andExpect(jsonPath("$.errors.rating").value("Rating must be at least 1"));
         mockMvc.perform(withJson(post(reviewsUrl()), student, "{\"rating\":6,\"comment\":\"too good\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.rating").value("Rating must be at most 5"));
+                .andExpect(jsonPath("$.errors.rating").value("Rating must be at most 5"));
         mockMvc.perform(withJson(post(reviewsUrl()), student, "{\"rating\":3,\"comment\":\"\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.comment").value("The review needs a comment"));
+                .andExpect(jsonPath("$.errors.comment").value("The review needs a comment"));
 
         Long id = review(student, courseId, 3, "fine");
         mockMvc.perform(withJson(put(reviewsUrl() + "/" + id), student, "{\"rating\":9,\"comment\":\"edit\"}"))
