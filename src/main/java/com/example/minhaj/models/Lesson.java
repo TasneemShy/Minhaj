@@ -19,6 +19,10 @@ public class Lesson {
     @JoinColumn(name = "course_id", nullable = false)
     private Course course;
 
+    // 1-based order inside the course; unique per course (checked at commit, see V2__lesson_position.sql)
+    @Column(nullable = false)
+    private int position;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -30,4 +34,7 @@ public class Lesson {
 
     public Course getCourse() { return course; }
     public void setCourse(Course course) { this.course = course; }
+
+    public int getPosition() { return position; }
+    public void setPosition(int position) { this.position = position; }
 }
