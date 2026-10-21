@@ -137,7 +137,8 @@ public class CourseService {
     }
 
     // Removes everything that references the course first, otherwise Postgres rejects the delete
-    // on the foreign keys. Progress goes before lessons because it references lessons.
+    // on the foreign keys. Progress goes before lessons because it references lessons. Quizzes, their questions
+    // and attempts go with the lessons through ON DELETE CASCADE (V6__quizzes.sql).
     @Transactional
     public void deleteCourse(Course course) {
         Long courseId = course.getId();
@@ -180,7 +181,8 @@ public class CourseService {
         return lessonRepository.save(lesson);
     }
 
-    // Progress goes first because it references the lesson; the lessons after it then move up one place.
+    // Progress goes first because it references the lesson; the lesson's quiz and its attempts are removed by
+    // ON DELETE CASCADE (V6__quizzes.sql). The lessons after it then move up one place.
     @Transactional
     public void deleteLesson(Course course, Long lessonId) {
         Lesson lesson = findLessonInCourse(course, lessonId);

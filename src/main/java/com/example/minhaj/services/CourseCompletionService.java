@@ -2,6 +2,8 @@ package com.example.minhaj.services;
 
 import com.example.minhaj.dtos.CompletionDTO;
 import com.example.minhaj.models.Course;
+import com.example.minhaj.models.Lesson;
+import com.example.minhaj.models.LessonProgress;
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.LessonProgressRepository;
 import com.example.minhaj.repositories.LessonRepository;
@@ -19,10 +21,34 @@ public class CourseCompletionService {
 
     private final LessonProgressRepository progressRepository;
     private final LessonRepository lessonRepository;
+    private final EmailService emailService;
 
-    public CourseCompletionService(LessonProgressRepository progressRepository, LessonRepository lessonRepository) {
+    public CourseCompletionService(LessonProgressRepository progressRepository, LessonRepository lessonRepository,
+                                   EmailService emailService) {
         this.progressRepository = progressRepository;
         this.lessonRepository = lessonRepository;
+        this.emailService = emailService;
+    }
+
+    public boolean isLessonCompleted(User student, Lesson lesson) {
+        return progressRepository.existsByUserIdAndLessonId(student.getId(), lesson.getId());
+    }
+
+    // Marks the lesson completed (idempotent). Used by the manual "complete" endpoint and by passing a quiz.
+    // The course was incomplete while this lesson was missing, so a new row that completes it is the
+    // incomplete -> complete transition and sends the congratulations email. Undoing a lesson and completing it
+    // again sends another email. Returns whether a new progress row was created.
+    public boolean recordLessonCompleted(User student, Lesson lesson) {
+        if (isLessonCompleted(student, lesson)) {
+            return false;
+        }
+        progressRepository.save(new LessonProgress(student, lesson));
+
+        Course course = lesson.getCourse();
+        if (completedAt(student, course).isPresent()) {
+            emailService.sendCourseCompletedEmail(student.getEmail(), student.getName(), course.getId(), course.getTitle());
+        }
+        return true;
     }
 
     // Empty while the course is incomplete or has no lessons.
