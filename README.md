@@ -574,6 +574,8 @@ Tests come in two groups:
 * **No local database and no `.env` are needed.** Tests use the `test` profile (`src/test/resources/application-test.properties`), which supplies a test-only JWT secret and dummy mail settings. The mail sender is mocked, so no email is sent, and your local `minhaj_db` is never touched.
 * **Run only what you changed.** Use `./mvnw test -Pintegration -Dtest=ReviewIntegrationTest` for one integration class (the `-Pintegration` is required, or the class is skipped), or `./mvnw test -Dtest=JwtUtilTest` for a fast one.
 
+* **Coverage report.** Run `./mvnw verify -Pintegration` (needs Docker) and open `target/site/jacoco/index.html`; CI uploads the same report as the `jacoco-report` artifact and shows a summary on the run page. With plain `./mvnw verify` the report covers only the fast tests.
+
 ### Database migrations
 
 The schema is managed by [Flyway](https://documentation.red-gate.com/flyway). Migrations live in `src/main/resources/db/migration` and run automatically on startup; Hibernate only validates the schema against the entities (`ddl-auto=validate`) and never changes it.

@@ -167,6 +167,37 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!-- Coverage report in target/site/jacoco (HTML + jacoco.csv). Report only, no threshold.
+                 0.8.15 is the latest release on Maven Central; JaCoCo must be recent to read Java 25 class files.
+                 prepare-agent sets the argLine property that Surefire picks up (the build sets no argLine of its own). -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.15</version>
+                <configuration>
+                    <excludes>
+                        <!-- Only SpringApplication.run(...): no logic, and it is never executed by the tests -->
+                        <exclude>com/example/minhaj/MinhajApplication.class</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <!-- verify, so the report reflects whichever tests ran (fast only, or -Pintegration) -->
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
