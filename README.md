@@ -109,7 +109,15 @@ Both are public. Endpoints are grouped by tag (Auth, Courses, Categories, Lesson
 >
 > Operations that need a token show a lock icon; public ones don't. The token's role still decides access, so admin endpoints answer 403 for a student token.
 
-A Postman collection is also included in the `postman/` folder.
+## Postman
+
+The `postman/` folder holds a ready-made collection and a local environment, so the API can be demoed without a frontend.
+
+1. In Postman choose **Import** and select `postman/Minhaj.postman_collection.json` and `postman/Minhaj.local.postman_environment.json`, then pick the **Minhaj Local** environment (`baseUrl` = `http://localhost:8080`).
+2. Start the app and run the folder **0. Quick start** with the Collection Runner: register, (verify), login, list courses, enroll, complete a lesson, progress. It needs at least one published course with a lesson: create one as an admin or instructor, or use seed data if the app runs with the optional `demo` profile.
+3. Tokens are stored automatically in collection variables (`accessToken`, `refreshToken`, `adminAccessToken`, `instructorAccessToken`), as are the ids from create responses (`courseId`, `lessonId`, `categoryId`, `reviewId`). Nothing secret is stored in the files; the variables stay local to your Postman.
+
+Enrolling and reviewing need a verified email: paste the token from the verification email into the `verificationToken` variable, or for a local demo run `UPDATE users SET email_verified = TRUE WHERE email = '...';`. Admin requests need the ADMIN role: run `UPDATE users SET role = 'ADMIN' WHERE email = '...';` once, then use **Auth > Login as admin**.
 
 ---
 
