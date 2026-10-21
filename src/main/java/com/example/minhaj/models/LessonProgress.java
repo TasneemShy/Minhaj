@@ -3,6 +3,7 @@ package com.example.minhaj.models;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 @Entity
 @Table(name = "lesson_progress",
@@ -29,7 +30,8 @@ public class LessonProgress {
     public LessonProgress(User user, Lesson lesson) {
         this.user = user;
         this.lesson = lesson;
-        this.completedAt = LocalDateTime.now();
+        // Postgres timestamp(6) keeps microseconds; truncate so the entity matches what is stored.
+        this.completedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
     }
 
     public Long getId() { return id; }
