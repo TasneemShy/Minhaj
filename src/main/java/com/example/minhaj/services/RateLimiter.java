@@ -1,6 +1,7 @@
 package com.example.minhaj.services;
 
 import com.example.minhaj.exceptions.RateLimitExceededException;
+import com.example.minhaj.metrics.AppMetrics;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.bucket4j.Bandwidth;
@@ -27,6 +28,7 @@ public class RateLimiter {
     private final Duration window;
     private final boolean trustForwardedFor;
     private final Cache<String, Bucket> buckets;
+    private final AppMetrics metrics;
 
     public RateLimiter(@Value("${app.rate-limit.enabled:true}") boolean enabled,
                        @Value("${app.rate-limit.login-per-email:5}") int loginPerEmail,
@@ -34,13 +36,15 @@ public class RateLimiter {
                        @Value("${app.rate-limit.per-ip:10}") int perIp,
                        @Value("${app.rate-limit.window:1m}") Duration window,
                        @Value("${app.rate-limit.trust-forwarded-for:false}") boolean trustForwardedFor,
-                       @Value("${app.rate-limit.max-tracked-keys:100000}") long maxTrackedKeys) {
+                       @Value("${app.rate-limit.max-tracked-keys:100000}") long maxTrackedKeys,
+                       AppMetrics metrics) {
         this.enabled = enabled;
         this.loginPerEmail = loginPerEmail;
         this.loginPerIp = loginPerIp;
         this.perIp = perIp;
         this.window = window;
         this.trustForwardedFor = trustForwardedFor;
+        this.metrics = metrics;
         this.buckets = Caffeine.newBuilder()
                 .maximumSize(maxTrackedKeys)
                 .expireAfterAccess(window)
@@ -50,13 +54,13 @@ public class RateLimiter {
     // Per client IP and endpoint. Login has its own, higher limit because many users can share one IP (NAT).
     public void checkIp(String endpoint, String clientIp) {
         int limit = endpoint.endsWith("/login") ? loginPerIp : perIp;
-        consume("ip|" + endpoint + "|" + clientIp, limit);
+        consume("ip|" + endpoint + "|" + clientIp, limit, endpoint, "ip");
     }
 
     // Login attempts per email and IP: slows password guessing against one account
     // without letting an attacker lock that account out from everywhere else.
     public void checkLogin(String email, String clientIp) {
-        consume("login|" + email.trim().toLowerCase(Locale.ROOT) + "|" + clientIp, loginPerEmail);
+        consume("login|" + email.trim().toLowerCase(Locale.ROOT) + "|" + clientIp, loginPerEmail, "/api/auth/login", "email");
     }
 
     // X-Forwarded-For is only read when app.rate-limit.trust-forwarded-for is on. Any client can send that header,
@@ -78,7 +82,8 @@ public class RateLimiter {
         buckets.invalidateAll();
     }
 
-    private void consume(String key, int limit) {
+    // endpoint and limitName only tag the rejection metric.
+    private void consume(String key, int limit, String endpoint, String limitName) {
         if (!enabled) {
             return;
         }
@@ -87,6 +92,7 @@ public class RateLimiter {
                 .build());
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
         if (!probe.isConsumed()) {
+            metrics.rateLimitRejected(endpoint, limitName);
             // Whole seconds, rounded up: Retry-After has no fractions
             long seconds = Math.max(1, (probe.getNanosToWaitForRefill() + 999_999_999L) / 1_000_000_000L);
             throw new RateLimitExceededException(seconds);

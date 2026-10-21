@@ -2,6 +2,7 @@ package com.example.minhaj.controllers;
 
 import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
+import com.example.minhaj.metrics.AppMetrics;
 import com.example.minhaj.models.Course;
 import com.example.minhaj.models.CourseStatus;
 import com.example.minhaj.models.User;
@@ -46,11 +47,14 @@ public class CourseController {
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
     private final CourseService courseService;
+    private final AppMetrics metrics;
 
-    public CourseController(CourseRepository courseRepository, UserRepository userRepository, CourseService courseService) {
+    public CourseController(CourseRepository courseRepository, UserRepository userRepository, CourseService courseService,
+                            AppMetrics metrics) {
         this.courseRepository = courseRepository;
         this.userRepository = userRepository;
         this.courseService = courseService;
+        this.metrics = metrics;
     }
 
     private Course findCourse(Long id) {
@@ -100,9 +104,9 @@ public class CourseController {
         Sort sort = Sort.by("asc".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Course> courses = courseRepository.findAll(
+        Page<Course> courses = metrics.timeCourseSearch(() -> courseRepository.findAll(
                 CourseSpecifications.withFilters(search, categoryId, free, minPrice, maxPrice, minRating, instructorId)
-                        .and(CourseSpecifications.hasStatus(CourseStatus.PUBLISHED)), pageable);
+                        .and(CourseSpecifications.hasStatus(CourseStatus.PUBLISHED)), pageable));
 
         Page<CourseDTO> courseDTOs = courses.map(CourseDTO::from);
 
@@ -229,7 +233,9 @@ public class CourseController {
 
         Course course = courseService.findPublishedCourse(id);
 
-        student.getEnrolledCourses().add(course);
+        if (student.getEnrolledCourses().add(course)) {
+            metrics.enrolled();
+        }
         userRepository.save(student);
 
         return ResponseEntity.ok(Map.of("message", "Successfully enrolled in course: " + course.getTitle()));
