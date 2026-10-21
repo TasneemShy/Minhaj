@@ -131,7 +131,7 @@ class EmailVerificationIntegrationTest extends IntegrationTestBase {
     @Test
     void unverifiedUsersCannotEnrollOrReviewButCanUseTheRest() throws Exception {
         String admin = adminToken();
-        Long courseId = createCourse(admin, "Gated", true, 0, null);
+        Long courseId = createPublishedCourse(admin, "Gated", true, 0, null);
         String email = uniqueEmail("gated");
         String token = registerUnverified("Gated", email, PASSWORD);
 

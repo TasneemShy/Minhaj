@@ -23,7 +23,7 @@ class ProgressIntegrationTest extends IntegrationTestBase {
     @BeforeEach
     void seed() throws Exception {
         String admin = adminToken();
-        courseId = createCourse(admin, "Three lessons", false, 10, null);
+        courseId = createPublishedCourse(admin, "Three lessons", false, 10, null);
         lesson1 = addLesson(admin, courseId, "One");
         lesson2 = addLesson(admin, courseId, "Two");
         lesson3 = addLesson(admin, courseId, "Three");
@@ -97,7 +97,7 @@ class ProgressIntegrationTest extends IntegrationTestBase {
     @Test
     void lessonFromAnotherCourseIs404() throws Exception {
         String admin = adminToken();
-        Long otherCourse = createCourse(admin, "Other", false, 1, null);
+        Long otherCourse = createPublishedCourse(admin, "Other", false, 1, null);
         Long foreignLesson = addLesson(admin, otherCourse, "Foreign");
         enroll(student, courseId);
 
@@ -112,7 +112,7 @@ class ProgressIntegrationTest extends IntegrationTestBase {
 
     @Test
     void courseWithoutLessonsIsZeroPercent() throws Exception {
-        Long empty = createCourse(adminToken(), "Empty", false, 1, null);
+        Long empty = createPublishedCourse(adminToken(), "Empty", false, 1, null);
         enroll(student, empty);
 
         mockMvc.perform(auth(get("/api/courses/" + empty + "/progress"), student))
@@ -122,7 +122,7 @@ class ProgressIntegrationTest extends IntegrationTestBase {
 
     @Test
     void myCoursesProgressListsEveryEnrolledCourse() throws Exception {
-        Long second = createCourse(adminToken(), "Second", false, 1, null);
+        Long second = createPublishedCourse(adminToken(), "Second", false, 1, null);
         enroll(student, courseId);
         enroll(student, second);
         completeLesson(student, courseId, lesson2);

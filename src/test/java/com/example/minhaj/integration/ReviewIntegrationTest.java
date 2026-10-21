@@ -21,7 +21,7 @@ class ReviewIntegrationTest extends IntegrationTestBase {
     @BeforeEach
     void seed() throws Exception {
         admin = adminToken();
-        courseId = createCourse(admin, "Reviewed", false, 10, null);
+        courseId = createPublishedCourse(admin, "Reviewed", false, 10, null);
     }
 
     private String reviewsUrl() {
@@ -110,7 +110,7 @@ class ReviewIntegrationTest extends IntegrationTestBase {
     void reviewMustBelongToTheCourseInThePath() throws Exception {
         String author = studentToken();
         Long id = review(author, courseId, 4, "mine");
-        Long otherCourse = createCourse(admin, "Other", false, 1, null);
+        Long otherCourse = createPublishedCourse(admin, "Other", false, 1, null);
 
         mockMvc.perform(withJson(put("/api/courses/" + otherCourse + "/reviews/" + id), author, "{\"rating\":2,\"comment\":\"x\"}"))
                 .andExpect(status().isNotFound());
@@ -121,7 +121,7 @@ class ReviewIntegrationTest extends IntegrationTestBase {
     @Test
     void clientSuppliedIdCannotOverwriteAnotherReview() throws Exception {
         Long victim = review(studentToken(), courseId, 5, "original");
-        Long otherCourse = createCourse(admin, "Other", false, 1, null);
+        Long otherCourse = createPublishedCourse(admin, "Other", false, 1, null);
 
         mockMvc.perform(withJson(post("/api/courses/" + otherCourse + "/reviews"), studentToken(),
                         "{\"id\":" + victim + ",\"rating\":1,\"comment\":\"hijack\"}"))

@@ -55,6 +55,9 @@ public interface AnalyticsRepository extends Repository<Course, Long> {
     @Query("select count(c) from Course c where c.isFree = true")
     long countFreeCourses();
 
+    @Query("select count(c) from Course c where c.status = com.example.minhaj.models.CourseStatus.PUBLISHED")
+    long countPublishedCourses();
+
     @Query("select count(cat) from Category cat")
     long countCategories();
 

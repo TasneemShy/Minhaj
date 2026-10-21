@@ -3,6 +3,7 @@ package com.example.minhaj.controllers;
 import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Course;
+import com.example.minhaj.models.CourseStatus;
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.CourseSpecifications;
@@ -11,6 +12,7 @@ import com.example.minhaj.services.CourseService;
 import com.example.minhaj.services.EmailVerificationService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -51,9 +53,14 @@ public class CourseController {
         this.courseService = courseService;
     }
 
+    private Course findCourse(Long id) {
+        return courseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + id));
+    }
+
     @Operation(summary = "List courses",
-            description = "Public. Returns a page of courses (Spring Data page: `content`, `totalElements`, `totalPages`, "
-                    + "`number`, `size`, ...). All filters are optional and combine with AND.")
+            description = "Public. Returns a page of PUBLISHED courses (Spring Data page: `content`, `totalElements`, `totalPages`, "
+                    + "`number`, `size`, ...). Drafts never appear here. All filters are optional and combine with AND.")
     @Parameter(name = "page", in = ParameterIn.QUERY, description = "Zero-based page index", example = "0")
     @Parameter(name = "size", in = ParameterIn.QUERY, description = "Page size", example = "10")
     @Parameter(name = "search", in = ParameterIn.QUERY, description = "Case-insensitive text contained in the title", example = "java")
@@ -94,28 +101,29 @@ public class CourseController {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Course> courses = courseRepository.findAll(
-                CourseSpecifications.withFilters(search, categoryId, free, minPrice, maxPrice, minRating, instructorId), pageable);
+                CourseSpecifications.withFilters(search, categoryId, free, minPrice, maxPrice, minRating, instructorId)
+                        .and(CourseSpecifications.hasStatus(CourseStatus.PUBLISHED)), pageable);
 
         Page<CourseDTO> courseDTOs = courses.map(CourseDTO::from);
 
         return ResponseEntity.ok(courseDTOs);
     }
 
-    @Operation(summary = "Get a course", description = "Public.")
+    @Operation(summary = "Get a course",
+            description = "Public for PUBLISHED courses. A DRAFT is returned only to its instructor and admins "
+                    + "(send the bearer token); everyone else gets 404.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The course"),
             @ApiResponse(responseCode = "404", ref = NOT_FOUND)
     })
     @GetMapping("/courses/{id}")
-    public ResponseEntity<CourseDTO> getCourseById(@PathVariable Long id) {
-        Course course = courseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + id));
-        return ResponseEntity.ok(CourseDTO.from(course));
+    public ResponseEntity<CourseDTO> getCourseById(@PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(CourseDTO.from(courseService.findVisibleCourse(id, authentication)));
     }
 
     @Operation(summary = "Create a course (admin)",
-            description = "Admin only. Creates a course with no instructor; instructors use `POST /api/instructor/courses`. "
-                    + "Free courses are stored with price 0.",
+            description = "Admin only. Creates a DRAFT course with no instructor; instructors use `POST /api/instructor/courses`. "
+                    + "Free courses are stored with price 0. Publish it with `POST /api/admin/courses/{id}/publish`.",
             security = @SecurityRequirement(name = BEARER_AUTH))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The created course"),
@@ -167,9 +175,39 @@ public class CourseController {
         return ResponseEntity.ok(Map.of("message", "Course deleted successfully!"));
     }
 
+    @Operation(summary = "Publish a course (admin)",
+            description = "Admin only. Makes the course PUBLISHED; 400 if it has no lessons. Publishing a published "
+                    + "course has no effect, and `publishedAt` keeps the first publish time.",
+            security = @SecurityRequirement(name = BEARER_AUTH))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The published course"),
+            @ApiResponse(responseCode = "400", ref = BAD_REQUEST),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN),
+            @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    })
+    @PostMapping("/admin/courses/{id}/publish")
+    public CourseDTO publishCourse(@PathVariable Long id) {
+        return CourseDTO.from(courseService.publish(findCourse(id)));
+    }
+
+    @Operation(summary = "Unpublish a course (admin)",
+            description = "Admin only. Moves the course back to DRAFT. Enrolled students keep their enrollment and progress.",
+            security = @SecurityRequirement(name = BEARER_AUTH))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The course, now a draft"),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN),
+            @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    })
+    @PostMapping("/admin/courses/{id}/unpublish")
+    public CourseDTO unpublishCourse(@PathVariable Long id) {
+        return CourseDTO.from(courseService.unpublish(findCourse(id)));
+    }
+
     @Operation(summary = "Enroll in a course",
             description = "Authenticated users with a verified email (403 otherwise). Enrolls the caller; enrolling again "
-                    + "in the same course has no effect.",
+                    + "in the same course has no effect. 404 for a DRAFT course.",
             security = @SecurityRequirement(name = BEARER_AUTH))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Enrolled", content = @Content(schema = @Schema(ref = MESSAGE_SCHEMA))),
@@ -189,8 +227,7 @@ public class CourseController {
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found in the database."));
         EmailVerificationService.requireVerified(student, "enroll in courses");
 
-        Course course = courseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + id));
+        Course course = courseService.findPublishedCourse(id);
 
         student.getEnrolledCourses().add(course);
         userRepository.save(student);
@@ -199,7 +236,8 @@ public class CourseController {
     }
 
     @Operation(summary = "List my enrolled courses",
-            description = "Authenticated users. The caller's enrolled courses ordered by id; empty when none.",
+            description = "Authenticated users. The caller's enrolled courses ordered by id; empty when none. "
+                    + "Includes courses unpublished after enrolling (their `status` is DRAFT).",
             security = @SecurityRequirement(name = BEARER_AUTH))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Enrolled courses"),

@@ -55,6 +55,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * Paginated catalog browsing with case-insensitive search, filters (category, free/paid, price range, minimum rating), and sorting.
 * Courses can be grouped into categories that administrators manage.
 * Instructors create and manage their own courses and lessons; a course shows its instructor's ID and name (never their email).
+* Draft/published lifecycle: new courses are private drafts until their instructor (or an admin) publishes them (see [Course lifecycle](#course-lifecycle-draft--published)).
 * Student enrollment and a "my courses" view.
 
 ### 3. Lessons
@@ -78,7 +79,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 
 ### 6. Admin Analytics
 
-* Platform overview: user counts per role, free vs paid courses, categories, lessons, enrollments, reviews, average rating, and completed lessons.
+* Platform overview: user counts per role, free vs paid and published vs draft courses, categories, lessons, enrollments, reviews, average rating, and completed lessons.
 * Top courses ranked by enrollments, rating, or review count, plus per-category and per-course statistics (including average lesson completion across enrolled students).
 * All figures are aggregated in the database rather than by loading records into memory.
 
@@ -164,11 +165,11 @@ The client IP is the TCP peer address (`request.getRemoteAddr()`). `X-Forwarded-
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `GET` | `/api/courses` | List courses (filters and sorting below) | Public |
-| `GET` | `/api/courses/{id}` | Get a course's details | Public |
-| `GET` | `/api/courses/{courseId}/lessons` | List a course's lessons, ordered by `position` | Public |
-| `POST` | `/api/courses/{id}/enroll` | Enroll the current user in a course | Authenticated, verified email |
-| `GET` | `/api/my-courses` | List the current user's enrolled courses (an empty list when there are none) | Authenticated |
+| `GET` | `/api/courses` | List published courses (filters and sorting below) | Public |
+| `GET` | `/api/courses/{id}` | Get a course's details (drafts: owner and admins only) | Public |
+| `GET` | `/api/courses/{courseId}/lessons` | List a course's lessons, ordered by `position` (drafts: owner and admins only) | Public |
+| `POST` | `/api/courses/{id}/enroll` | Enroll the current user in a published course | Authenticated, verified email |
+| `GET` | `/api/my-courses` | List the current user's enrolled courses, with each course's `status` (an empty list when there are none) | Authenticated |
 | `GET` | `/api/categories` | List all categories | Public |
 
 #### Course list query parameters
@@ -207,8 +208,8 @@ The client IP is the TCP peer address (`request.getRemoteAddr()`). `X-Forwarded-
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `GET` | `/api/courses/{courseId}/reviews` | List a course's reviews, newest first (`?page=0&size=10`) | Public |
-| `POST` | `/api/courses/{courseId}/reviews` | Review a course (body: `{"comment", "rating"}`) | Authenticated, verified email |
+| `GET` | `/api/courses/{courseId}/reviews` | List a course's reviews, newest first (`?page=0&size=10`; drafts: owner and admins only) | Public |
+| `POST` | `/api/courses/{courseId}/reviews` | Review a published course (body: `{"comment", "rating"}`) | Authenticated, verified email |
 | `PUT` | `/api/courses/{courseId}/reviews/{reviewId}` | Edit your review (body: `{"comment", "rating"}`) | Review author |
 | `DELETE` | `/api/courses/{courseId}/reviews/{reviewId}` | Delete a review | Review author or Admin |
 | `GET` | `/api/users/{userId}/reviews` | List a user's reviews, newest first (`?page=0&size=10`) | Authenticated |
@@ -219,9 +220,11 @@ Instructors can only modify their own courses (`403` otherwise); administrators 
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `GET` | `/api/instructor/courses` | List my courses (paged with `page`, `size`) | Instructor, Admin |
-| `POST` | `/api/instructor/courses` | Create a course owned by me (body: see [Course request body](#course-request-body)) | Instructor, Admin |
+| `GET` | `/api/instructor/courses` | List my courses, drafts included (paged with `page`, `size`; `?status=DRAFT\|PUBLISHED` to filter) | Instructor, Admin |
+| `POST` | `/api/instructor/courses` | Create a draft course owned by me (body: see [Course request body](#course-request-body)) | Instructor, Admin |
 | `PUT` | `/api/instructor/courses/{id}` | Update my course | Instructor (owner), Admin |
+| `POST` | `/api/instructor/courses/{id}/publish` | Publish my course (needs at least one lesson) | Instructor (owner), Admin |
+| `POST` | `/api/instructor/courses/{id}/unpublish` | Move my course back to draft | Instructor (owner), Admin |
 | `DELETE` | `/api/instructor/courses/{id}` | Delete my course | Instructor (owner), Admin |
 | `POST` | `/api/instructor/courses/{courseId}/lessons` | Add a lesson to the end of my course (body: `{"title", "videoUrl"}`) | Instructor (owner), Admin |
 | `PUT` | `/api/instructor/courses/{courseId}/lessons/{lessonId}` | Edit a lesson of my course (body: `{"title", "videoUrl"}`) | Instructor (owner), Admin |
@@ -232,8 +235,10 @@ Instructors can only modify their own courses (`403` otherwise); administrators 
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `POST` | `/api/admin/courses` | Create a course (body: see [Course request body](#course-request-body)) | Admin |
+| `POST` | `/api/admin/courses` | Create a draft course (body: see [Course request body](#course-request-body)) | Admin |
 | `PUT` | `/api/admin/courses/{id}` | Update a course | Admin |
+| `POST` | `/api/admin/courses/{id}/publish` | Publish any course (needs at least one lesson) | Admin |
+| `POST` | `/api/admin/courses/{id}/unpublish` | Move any course back to draft | Admin |
 | `DELETE` | `/api/admin/courses/{id}` | Delete a course | Admin |
 | `POST` | `/api/admin/courses/{courseId}/lessons` | Add a lesson to the end of a course (body: `{"title", "videoUrl"}`) | Admin |
 | `PUT` | `/api/admin/courses/{courseId}/lessons/{lessonId}` | Edit a lesson (body: `{"title", "videoUrl"}`) | Admin |
@@ -260,6 +265,21 @@ Every lesson has a `position` (1-based, unique within its course) that is return
 
 A lesson ID that is not part of the course in the URL is a `404` for edit and delete.
 
+#### Course lifecycle (draft → published)
+
+Every course has a `status` of `DRAFT` or `PUBLISHED`, returned in `CourseDTO` together with `publishedAt`.
+
+* New courses (`POST /api/admin/courses`, `POST /api/instructor/courses`) start as `DRAFT`. `status` and `publishedAt` in a request body are ignored.
+* `POST .../{id}/publish` makes the course `PUBLISHED`. A course with no lessons cannot be published (`400`). Publishing an already published course changes nothing.
+* `publishedAt` is set on the **first** publish and kept afterwards, through unpublish and re-publish, so re-publishing does not push a course to the top of the newest-first catalog. It is `null` for a course that was never published.
+* `POST .../{id}/unpublish` moves the course back to `DRAFT`.
+* Drafts never appear in `GET /api/courses`. `GET /api/courses/{id}`, `.../lessons` and `.../reviews` return a draft only to its instructor and admins (send the bearer token); everyone else gets the same `404` as for a course that does not exist, so a draft's existence is not leaked.
+* Enrolling in or reviewing a draft is a `404` for everyone, including its instructor and admins.
+* Students who enrolled before a course was unpublished keep their enrollment, progress and reviews. The course stays in their `GET /api/my-courses` (with `"status": "DRAFT"`) and progress endpoints, but they cannot open its detail page or post new reviews until it is published again.
+* `GET /api/instructor/courses` lists drafts and published courses; filter with `?status=DRAFT` or `?status=PUBLISHED`.
+* The analytics overview reports `publishedCourses` and `draftCourses` next to `totalCourses`.
+* Courses that existed before the lifecycle was added were migrated to `PUBLISHED` with `publishedAt = createdAt` (Flyway `V3__course_status.sql`).
+
 #### Course request body
 
 `POST` and `PUT` on `/api/admin/courses` and `/api/instructor/courses` take the same body. Every field except `title` is optional; `PUT` replaces all of them. A free course always has price `0`.
@@ -283,7 +303,7 @@ A lesson ID that is not part of the course in the URL is a `404` for edit and de
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `GET` | `/api/admin/analytics/overview` | Platform totals: users (and per role), courses (free/paid), categories, lessons, enrollments, reviews, average rating, completed lessons | Admin |
+| `GET` | `/api/admin/analytics/overview` | Platform totals: users (and per role), courses (free/paid, published/draft), categories, lessons, enrollments, reviews, average rating, completed lessons | Admin |
 | `GET` | `/api/admin/analytics/top-courses` | Top courses; `by=enrollments` (default), `rating` or `reviews`, `limit=1..50` (default `5`) | Admin |
 | `GET` | `/api/admin/analytics/categories` | Course count, enrollments and average rating per category, plus an `Uncategorized` row | Admin |
 | `GET` | `/api/admin/analytics/courses/{id}` | One course's enrollments, lessons, reviews, average rating and average completion % | Admin |
