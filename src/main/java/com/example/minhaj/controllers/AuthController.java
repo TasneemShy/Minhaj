@@ -11,6 +11,7 @@ import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.PasswordResetTokenRepository;
 import com.example.minhaj.repositories.UserRepository;
 import com.example.minhaj.services.EmailService;
+import com.example.minhaj.services.ResetTokens;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -90,22 +91,23 @@ public class AuthController {
 
         User user = userOptional.get();
 
-        String token = java.util.UUID.randomUUID().toString();
+        // Only the hash is stored; the raw token exists only in the email.
+        String rawToken = ResetTokens.newRawToken();
 
         tokenRepository.deleteByUser(user);
         tokenRepository.flush();
 
-        PasswordResetToken resetToken = new PasswordResetToken(token, user);
+        PasswordResetToken resetToken = new PasswordResetToken(ResetTokens.hash(rawToken), user);
         tokenRepository.save(resetToken);
 
-        emailService.sendPasswordResetEmail(user.getEmail(), token);
+        emailService.sendPasswordResetEmail(user.getEmail(), rawToken);
 
         return ResponseEntity.ok("If the email exists, a reset link has been sent.");
     }
 
     @PostMapping("/reset-password")
     public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        Optional<PasswordResetToken> tokenOptional = tokenRepository.findByToken(request.token());
+        Optional<PasswordResetToken> tokenOptional = tokenRepository.findByToken(ResetTokens.hash(request.token()));
 
         if (tokenOptional.isEmpty()) {
             throw ApiException.badRequest("Invalid Token.");

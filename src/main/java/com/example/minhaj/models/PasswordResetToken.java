@@ -10,6 +10,7 @@ public class PasswordResetToken {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // SHA-256 hex hash of the emailed token (see ResetTokens), never the raw token.
     @Column(nullable = false, unique = true)
     private String token;
 
@@ -22,8 +23,8 @@ public class PasswordResetToken {
 
     public PasswordResetToken() {}
 
-    public PasswordResetToken(String token, User user) {
-        this.token = token;
+    public PasswordResetToken(String tokenHash, User user) {
+        this.token = tokenHash;
         this.user = user;
         this.expiryDate = LocalDateTime.now().plusMinutes(15);
     }

@@ -43,7 +43,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 
 * User registration with BCrypt password hashing and a welcome email.
 * Login that issues a signed JWT (valid for 24 hours); tokens stay valid across restarts because the signing key comes from configuration.
-* Forgot-password flow: emails a one-time reset token valid for 15 minutes.
+* Forgot-password flow: emails a one-time reset link valid for 15 minutes. Only a SHA-256 hash of the token is stored in the database.
 * Role-based access control with three roles: students (`STUDENT`, the default on registration), instructors (`INSTRUCTOR`), and administrators (`ADMIN`). Administrators assign roles.
 * User profile: view your account, update your name, change your password (current password required), and unenroll from courses (which also clears your progress in them).
 
@@ -114,6 +114,8 @@ A Postman collection is also included in the `postman/` folder.
 | `POST` | `/api/auth/login` | Log in and get a JWT | Public |
 | `POST` | `/api/auth/forgot-password` | Email a password reset token (body: `{"email"}`) | Public |
 | `POST` | `/api/auth/reset-password` | Set a new password (body: `{"token", "newPassword"}`) | Public |
+
+**Password reset flow:** `forgot-password` always gives the same answer, whether or not the email is registered. For a registered email it sends a link to `<FRONTEND_URL>/reset-password?token=<token>` (`FRONTEND_URL` defaults to `http://localhost:5173`). The backend does not serve that page: the frontend reads `token` from the URL, asks for the new password and sends `POST /api/auth/reset-password` with `{"token", "newPassword"}`. The token is valid for 15 minutes and can be used once; asking again replaces the previous token.
 
 ### Course Catalog & Learning
 
@@ -299,9 +301,12 @@ MAIL_USERNAME=your-mailtrap-username
 MAIL_PASSWORD=your-mailtrap-password
 JWT_SECRET=your-base64-jwt-secret
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+FRONTEND_URL=http://localhost:5173
 ```
 
 `CORS_ALLOWED_ORIGINS` is a comma-separated list of the exact browser origins allowed to call the API (optional; defaults to the local React/Vite dev servers shown above). Set it to your frontend's URL in production, e.g. `https://app.example.com`. A `*` wildcard is rejected and the app refuses to start.
+
+`FRONTEND_URL` is the base URL of the frontend (optional; defaults to `http://localhost:5173`). Password reset emails link to `<FRONTEND_URL>/reset-password?token=...`, so the frontend must serve that page.
 
 Generate a JWT secret (a base64-encoded 256-bit key) with:
 
