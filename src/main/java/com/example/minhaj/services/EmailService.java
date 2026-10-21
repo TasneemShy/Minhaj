@@ -1,11 +1,15 @@
 package com.example.minhaj.services;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 // Emails are best-effort: they are sent off the request thread and a failed send
 // is logged rather than propagated, so it never fails registration or password reset.
@@ -14,9 +18,14 @@ public class EmailService {
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
 
     private final JavaMailSender mailSender;
+    private final String frontendUrl;
 
-    public EmailService(JavaMailSender mailSender) {
+    // frontendUrl: base URL of the web app that serves the /reset-password page (app.frontend-url).
+    public EmailService(JavaMailSender mailSender, @Value("${app.frontend-url}") String frontendUrl) {
         this.mailSender = mailSender;
+        this.frontendUrl = frontendUrl.endsWith("/")
+                ? frontendUrl.substring(0, frontendUrl.length() - 1)
+                : frontendUrl;
     }
 
     @Async
@@ -39,7 +48,8 @@ public class EmailService {
         message.setTo(toEmail);
         message.setSubject("Password Reset Request - Minhaj Platform 🔒");
 
-        String resetUrl = "http://localhost:8080/reset-password?token=" + token;
+        // The frontend page reads the token from the URL and POSTs it to /api/auth/reset-password.
+        String resetUrl = frontendUrl + "/reset-password?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
 
         message.setText("We received a request to reset your password.\n\n" +
                 "Please use the following link to set a new password (valid for 15 minutes):\n" +
