@@ -29,6 +29,8 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/minhaj_db
       - SPRING_DATASOURCE_USERNAME=tasneem
       - SPRING_DATASOURCE_PASSWORD=root
+      # JSON (ECS) console logs for log shippers; METRICS_TOKEN itself comes from .env
+      - LOG_FORMAT=json
     depends_on:
       db:
         condition: service_healthy
