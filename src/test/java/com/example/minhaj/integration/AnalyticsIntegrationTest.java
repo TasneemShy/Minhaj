@@ -125,8 +125,50 @@ class AnalyticsIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.averageCompletionPercentage").value(0.0));
 
         mockMvc.perform(auth(get("/api/admin/analytics/courses/" + courseD), admin))
-                .andExpect(jsonPath("$.categoryName").doesNotExist());
+                .andExpect(jsonPath("$.categoryName").doesNotExist())
+                .andExpect(jsonPath("$.completions").value(0))
+                .andExpect(jsonPath("$.completionRate").value(0.0));
         mockMvc.perform(auth(get("/api/admin/analytics/courses/999999"), admin)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void courseCompletionsCountStudentsWhoFinishedEveryLesson() throws Exception {
+        // A: s2 completed both lessons, s1 only one -> 1 of 2 enrolled
+        mockMvc.perform(auth(get("/api/admin/analytics/courses/" + courseA), admin))
+                .andExpect(jsonPath("$.completions").value(1))
+                .andExpect(jsonPath("$.completionRate").value(50.0));
+
+        // B: its only student completed its only lesson
+        mockMvc.perform(auth(get("/api/admin/analytics/courses/" + courseB), admin))
+                .andExpect(jsonPath("$.completions").value(1))
+                .andExpect(jsonPath("$.completionRate").value(100.0));
+
+        // C: nobody enrolled
+        mockMvc.perform(auth(get("/api/admin/analytics/courses/" + courseC), admin))
+                .andExpect(jsonPath("$.completions").value(0))
+                .andExpect(jsonPath("$.completionRate").value(0.0));
+
+        // A third student in A with no progress lowers the rate to 1 of 3
+        enroll(studentToken(), courseA);
+        mockMvc.perform(auth(get("/api/admin/analytics/courses/" + courseA), admin))
+                .andExpect(jsonPath("$.completions").value(1))
+                .andExpect(jsonPath("$.completionRate").value(33.3));
+
+        // A new lesson in B means nobody has completed it any more
+        addLesson(admin, courseB, "B2");
+        mockMvc.perform(auth(get("/api/admin/analytics/courses/" + courseB), admin))
+                .andExpect(jsonPath("$.completions").value(0))
+                .andExpect(jsonPath("$.completionRate").value(0.0));
+    }
+
+    @Test
+    void courseWithoutLessonsHasNoCompletions() throws Exception {
+        enroll(studentToken(), courseD);
+
+        mockMvc.perform(auth(get("/api/admin/analytics/courses/" + courseD), admin))
+                .andExpect(jsonPath("$.enrollmentCount").value(1))
+                .andExpect(jsonPath("$.completions").value(0))
+                .andExpect(jsonPath("$.completionRate").value(0.0));
     }
 
     @Test
