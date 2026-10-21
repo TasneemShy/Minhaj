@@ -58,8 +58,10 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 
 ### 3. Lessons
 
-* Administrators can add lessons (title and video URL) to a course.
-* Anyone can list a course's lessons; the course's lesson count is tracked automatically.
+* Administrators and the course's instructor can add, edit, delete and reorder lessons (title and video URL).
+* Lessons are ordered: each has a `position` (1, 2, 3, … within its course). New lessons go to the end, deleting a lesson closes the gap, and a reorder sets the whole order at once.
+* Anyone can list a course's lessons, in position order; the course's lesson count is tracked automatically.
+* Deleting a lesson also deletes students' completion records for it, so progress percentages are recalculated against the remaining lessons.
 
 ### 4. Learning Progress
 
@@ -119,7 +121,7 @@ A Postman collection is also included in the `postman/` folder.
 | --- | --- | --- | --- |
 | `GET` | `/api/courses` | List courses (filters and sorting below) | Public |
 | `GET` | `/api/courses/{id}` | Get a course's details | Public |
-| `GET` | `/api/courses/{courseId}/lessons` | List a course's lessons | Public |
+| `GET` | `/api/courses/{courseId}/lessons` | List a course's lessons, ordered by `position` | Public |
 | `POST` | `/api/courses/{id}/enroll` | Enroll the current user in a course | Authenticated |
 | `GET` | `/api/my-courses` | List the current user's enrolled courses (an empty list when there are none) | Authenticated |
 | `GET` | `/api/categories` | List all categories | Public |
@@ -176,7 +178,10 @@ Instructors can only modify their own courses (`403` otherwise); administrators 
 | `POST` | `/api/instructor/courses` | Create a course owned by me (body: see [Course request body](#course-request-body)) | Instructor, Admin |
 | `PUT` | `/api/instructor/courses/{id}` | Update my course | Instructor (owner), Admin |
 | `DELETE` | `/api/instructor/courses/{id}` | Delete my course | Instructor (owner), Admin |
-| `POST` | `/api/instructor/courses/{courseId}/lessons` | Add a lesson to my course (body: `{"title", "videoUrl"}`) | Instructor (owner), Admin |
+| `POST` | `/api/instructor/courses/{courseId}/lessons` | Add a lesson to the end of my course (body: `{"title", "videoUrl"}`) | Instructor (owner), Admin |
+| `PUT` | `/api/instructor/courses/{courseId}/lessons/{lessonId}` | Edit a lesson of my course (body: `{"title", "videoUrl"}`) | Instructor (owner), Admin |
+| `DELETE` | `/api/instructor/courses/{courseId}/lessons/{lessonId}` | Delete a lesson of my course (see [Lesson ordering](#lesson-ordering)) | Instructor (owner), Admin |
+| `PUT` | `/api/instructor/courses/{courseId}/lessons/order` | Reorder my course's lessons (body: `{"lessonIds": [...]}`) | Instructor (owner), Admin |
 
 ### Administration (`/api/admin`)
 
@@ -185,12 +190,30 @@ Instructors can only modify their own courses (`403` otherwise); administrators 
 | `POST` | `/api/admin/courses` | Create a course (body: see [Course request body](#course-request-body)) | Admin |
 | `PUT` | `/api/admin/courses/{id}` | Update a course | Admin |
 | `DELETE` | `/api/admin/courses/{id}` | Delete a course | Admin |
-| `POST` | `/api/admin/courses/{courseId}/lessons` | Add a lesson to a course (body: `{"title", "videoUrl"}`) | Admin |
+| `POST` | `/api/admin/courses/{courseId}/lessons` | Add a lesson to the end of a course (body: `{"title", "videoUrl"}`) | Admin |
+| `PUT` | `/api/admin/courses/{courseId}/lessons/{lessonId}` | Edit a lesson (body: `{"title", "videoUrl"}`) | Admin |
+| `DELETE` | `/api/admin/courses/{courseId}/lessons/{lessonId}` | Delete a lesson (see [Lesson ordering](#lesson-ordering)) | Admin |
+| `PUT` | `/api/admin/courses/{courseId}/lessons/order` | Reorder a course's lessons (body: `{"lessonIds": [...]}`) | Admin |
 | `GET` | `/api/admin/users` | List all users (passwords never returned) | Admin |
 | `PUT` | `/api/admin/users/{id}/role` | Set a user's role (body: `{"role": "STUDENT" \| "INSTRUCTOR" \| "ADMIN"}`) | Admin |
 | `POST` | `/api/admin/categories` | Create a category (body: `{"name", "description"}`) | Admin |
 | `PUT` | `/api/admin/categories/{id}` | Rename or describe a category | Admin |
 | `DELETE` | `/api/admin/categories/{id}` | Delete a category (only if no courses use it) | Admin |
+
+#### Lesson ordering
+
+Every lesson has a `position` (1-based, unique within its course) that is returned in `LessonDTO` and decides the order of `GET /api/courses/{courseId}/lessons`.
+
+* `POST .../lessons` puts the new lesson at the end (highest position + 1).
+* `PUT .../lessons/{lessonId}` changes only `title` and `videoUrl`; the position stays.
+* `DELETE .../lessons/{lessonId}` removes the lesson and its completion records, moves the following lessons up one place and lowers the course's `lessonCount`.
+* `PUT .../lessons/order` takes every lesson ID of the course exactly once, in the new order, and assigns positions 1..n. A missing, duplicated or foreign ID is a `400`; the response is the reordered lesson list.
+
+```json
+{ "lessonIds": [12, 10, 11] }
+```
+
+A lesson ID that is not part of the course in the URL is a `404` for edit and delete.
 
 #### Course request body
 
