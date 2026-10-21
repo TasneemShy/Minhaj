@@ -318,12 +318,13 @@ Every course has a `status` of `DRAFT` or `PUBLISHED`, returned in `CourseDTO` t
 | `GET` | `/actuator/health/liveness` | Liveness probe: the app is running | Public |
 | `GET` | `/actuator/health/readiness` | Readiness probe: the app can serve traffic and the database is reachable | Public |
 | `GET` | `/actuator/info` | Application name, description, version and build info | Public |
+| `GET` | `/actuator/prometheus` | Metrics in Prometheus format (see [Monitoring](#monitoring)) | ADMIN token or the metrics token |
 
-Only `health` and `info` are exposed over HTTP; all other actuator endpoints are disabled on the web. The mail health check is turned off, so a Mailtrap outage never marks the app as down.
+Only `health`, `info` and `prometheus` are exposed over HTTP; all other actuator endpoints are disabled on the web. The mail health check is turned off, so a Mailtrap outage never marks the app as down.
 
 ### Error format
 
-Every error response uses [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457) with content type `application/problem+json`: `type`, `title` (the HTTP reason phrase), `status`, `detail` (a human-readable message) and `instance` (the request path). Validation failures add an `errors` object mapping each invalid field to its message:
+Every error response uses [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457) with content type `application/problem+json`: `type`, `title` (the HTTP reason phrase), `status`, `detail` (a human-readable message), `instance` (the request path) and `requestId` (the same value as the `X-Request-Id` response header; quote it when reporting a problem, see [Request IDs](#request-ids)). Validation failures add an `errors` object mapping each invalid field to its message:
 
 ```json
 {
@@ -332,6 +333,7 @@ Every error response uses [RFC 9457 Problem Details](https://www.rfc-editor.org/
   "status": 400,
   "detail": "Request validation failed.",
   "instance": "/api/auth/register",
+  "requestId": "3f2b8c1e-5a7d-4e2f-9b1c-0d6e8a4f7c21",
   "errors": {
     "email": "Invalid email format",
     "password": "Password must be at least 6 characters long"
@@ -340,6 +342,45 @@ Every error response uses [RFC 9457 Problem Details](https://www.rfc-editor.org/
 ```
 
 Common statuses: `400` invalid input, `401` missing/invalid token or wrong login, `403` authenticated but not allowed, `404` not found, `409` email already registered, `500` unexpected error (the detail never includes internal exception messages).
+
+### Monitoring
+
+#### Metrics (`/actuator/prometheus`)
+
+Metrics come from Micrometer in Prometheus text format. Every series carries the tag `application="minhaj"`. The endpoint is not public; it accepts either:
+
+- an **ADMIN** access token (`Authorization: Bearer <JWT>`), or
+- the static **metrics token** from `METRICS_TOKEN` (`Authorization: Bearer <METRICS_TOKEN>`), so Prometheus can scrape without a user JWT. The token must be at least 32 characters (`openssl rand -hex 32`) and is only accepted on this one endpoint. If `METRICS_TOKEN` is empty, only ADMIN tokens can read the metrics.
+
+Prometheus scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: minhaj
+    metrics_path: /actuator/prometheus
+    authorization:
+      credentials: <METRICS_TOKEN>
+    static_configs:
+      - targets: ["minhaj-app:8080"]
+```
+
+Besides the built-in JVM, Tomcat, HikariCP and HTTP metrics (`http_server_requests_seconds`, tagged with the URI *template* such as `/api/courses/{id}`, never the raw ID), the app records:
+
+| Metric | Tags | Meaning |
+| --- | --- | --- |
+| `minhaj_auth_logins_total` | `result` = `success` / `failure` | Login attempts; `failure` = wrong email or password |
+| `minhaj_auth_registrations_total` | | Accounts created via `POST /api/auth/register` |
+| `minhaj_ratelimit_rejections_total` | `endpoint`, `limit` = `ip` / `email` | Requests rejected with `429` by the auth rate limits |
+| `minhaj_enrollments_total` | | New course enrollments (re-enrolling is not counted) |
+| `minhaj_course_search_seconds` | | Timer around the course catalog query (`GET /api/courses`) |
+
+#### Logs
+
+Logs go to the console. By default they are plain text; with `LOG_FORMAT=json` (set by `docker-compose.yml`) each line is a JSON object in [Elastic Common Schema](https://www.elastic.co/guide/en/ecs/current/index.html), ready for a log shipper. Passwords, tokens, `Authorization` headers and reset/verification tokens are never logged.
+
+#### Request IDs
+
+Every response has an `X-Request-Id` header. Send your own (1–64 characters of `A-Z a-z 0-9 - _`, e.g. from an API gateway) and it is reused; otherwise, or if it is invalid, the API generates a UUID. The ID is on every log line of that request (`requestId` field in JSON logs, `[<id>]` before the logger name in text logs) and in the `requestId` property of error responses, so one ID from a user's error message finds all the related log lines. Browsers can read the header (it is exposed via CORS).
 
 ---
 
@@ -368,6 +409,8 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 FRONTEND_URL=http://localhost:5173
 JWT_ACCESS_TTL=15m
 JWT_REFRESH_TTL=14d
+METRICS_TOKEN=
+LOG_FORMAT=text
 ```
 
 `CORS_ALLOWED_ORIGINS` is a comma-separated list of the exact browser origins allowed to call the API (optional; defaults to the local React/Vite dev servers shown above). Set it to your frontend's URL in production, e.g. `https://app.example.com`. A `*` wildcard is rejected and the app refuses to start.
@@ -375,6 +418,8 @@ JWT_REFRESH_TTL=14d
 `FRONTEND_URL` is the base URL of the frontend (optional; defaults to `http://localhost:5173`). Password reset emails link to `<FRONTEND_URL>/reset-password?token=...` and verification emails to `<FRONTEND_URL>/verify-email?token=...`, so the frontend must serve both pages.
 
 `JWT_ACCESS_TTL` and `JWT_REFRESH_TTL` set the access and refresh token lifetimes (optional; `15m` and `14d` by default, any Spring duration such as `30m`, `12h`, `7d`).
+
+`METRICS_TOKEN` (optional, at least 32 characters) lets a Prometheus server read `/actuator/prometheus`; `LOG_FORMAT` is `text` (default) or `json`. See [Monitoring](#monitoring).
 
 Generate a JWT secret (a base64-encoded 256-bit key) with:
 
