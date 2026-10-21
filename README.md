@@ -610,4 +610,22 @@ The schema is managed by [Flyway](https://documentation.red-gate.com/flyway). Mi
 
 ## Roadmap
 
-* [ ] AWS S3 integration for course images and lesson media.
+The API is feature-complete for a backend portfolio project. These are planned for when the platform moves toward a real product.
+
+### Product
+
+* [ ] **Media storage:** course images and lesson videos in object storage (AWS S3 or Cloudflare R2), uploaded through pre-signed URLs, with lesson `videoUrl`s pointing at the stored files.
+* [ ] **Payments:** Stripe checkout for paid courses (test mode first), enrollment unlocked by a payment webhook, and refunds handled the same way.
+* [ ] **Frontend:** a separate React + Vite + TypeScript app with a typed client generated from `/v3/api-docs`. CORS and `FRONTEND_URL` already default to `http://localhost:5173`.
+
+### Platform and operations
+
+* [ ] **Deployment:** CI publishes the Docker image to GitHub Container Registry and deploys it to a managed host with managed PostgreSQL. Secrets (`JWT_SECRET`, mail, `METRICS_TOKEN`) come from the platform, and the app is served over HTTPS only.
+* [ ] **Production email:** replace the Mailtrap sandbox with a transactional email provider and a verified sending domain.
+* [ ] **Observability backend:** a Prometheus + Grafana (or hosted) setup scraping `/actuator/prometheus`, with alerts on error rate and latency.
+
+### Engineering quality
+
+* [ ] **Coverage gate:** enforce a JaCoCo minimum in CI (about 90% line and 85% branch coverage, in line with current numbers).
+* [ ] **Postman and demo data for quizzes:** add the quiz endpoints to the Postman collection, and quizzes to the `demo` seed data.
+* [ ] **API cleanup:** remove the deprecated `token` field from auth responses (`accessToken` replaces it).
