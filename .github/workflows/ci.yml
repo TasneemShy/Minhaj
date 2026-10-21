@@ -39,7 +39,7 @@ jobs:
       # Integration tests start their own Postgres with Testcontainers (Docker is available on
       # ubuntu-latest), and the JWT secret / mail settings come from src/test/resources/application-test.properties.
       - name: Build and Test with Maven
-        run: ./mvnw -B clean verify
+        run: ./mvnw -B clean verify -Pintegration
 
       - name: Publish test report
         if: always()

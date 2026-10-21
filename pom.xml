@@ -28,6 +28,9 @@
     </scm>
     <properties>
         <java.version>25</java.version>
+        <!-- Read by Surefire. By default the Docker-backed tests tagged "integration" are skipped,
+             so ./mvnw test is fast; -Pintegration runs everything (CI always does). -->
+        <excludedGroups>integration</excludedGroups>
     </properties>
     <dependencies>
         <dependency>
@@ -161,5 +164,15 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Full suite, including the Testcontainers integration tests (needs Docker). -->
+        <profile>
+            <id>integration</id>
+            <properties>
+                <excludedGroups></excludedGroups>
+            </properties>
+        </profile>
+    </profiles>
 
 </project>

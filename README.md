@@ -420,14 +420,17 @@ Prerequisites: JDK 25 and PostgreSQL running on port `5432` with a `minhaj_db` d
 
 ### Running tests
 
-```bash
-./mvnw test
-```
+Tests come in two groups:
 
-* **Docker must be running.** The integration tests start a throwaway `postgres:15-alpine` container with [Testcontainers](https://testcontainers.com/) (one container shared by the whole run); Flyway migrates it and Hibernate validates the schema, just like at startup.
-* **No local database and no `.env` are needed.** Tests run with the `test` profile (`src/test/resources/application-test.properties`), which supplies a test-only JWT secret and dummy mail settings; the mail sender is mocked, so no email is ever sent. Your local `minhaj_db` is never touched.
-* Integration tests (`src/test/java/.../integration`) drive the real API end to end through MockMvc with real security and JWTs; every test starts from empty tables. `@WebMvcTest` slice tests (`.../web`) and plain unit tests run without Docker.
-* Run one class with `./mvnw test -Dtest=ReviewIntegrationTest`.
+| Command | What runs | Needs Docker | Time |
+| --- | --- | --- | --- |
+| `./mvnw test` | Fast tests only: unit tests and `@WebMvcTest` slices | No | Seconds |
+| `./mvnw verify -Pintegration` | Everything, including the integration tests | Yes | A few minutes |
+
+* **CI runs the full suite** (`-Pintegration`) on every push and pull request, so there's no need to run it all locally for every change.
+* **Integration tests** (everything extending `IntegrationTestBase`, tagged `integration`) start a throwaway `postgres:15-alpine` container with [Testcontainers](https://testcontainers.com/) (one container shared by the whole run). Flyway migrates it and Hibernate validates the schema, just like at startup. They drive the real API end to end through MockMvc, with real security and JWTs, and every test starts from empty tables.
+* **No local database and no `.env` are needed.** Tests use the `test` profile (`src/test/resources/application-test.properties`), which supplies a test-only JWT secret and dummy mail settings. The mail sender is mocked, so no email is sent, and your local `minhaj_db` is never touched.
+* **Run only what you changed.** Use `./mvnw test -Pintegration -Dtest=ReviewIntegrationTest` for one integration class (the `-Pintegration` is required, or the class is skipped), or `./mvnw test -Dtest=JwtUtilTest` for a fast one.
 
 ### Database migrations
 

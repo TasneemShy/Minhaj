@@ -5,6 +5,7 @@ import com.example.minhaj.repositories.UserRepository;
 import com.example.minhaj.services.RateLimiter;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -24,6 +25,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 // Base for end-to-end tests: the real app (security, JWT, JPA, Flyway) against the Testcontainers Postgres.
 // Every subclass shares one Spring context and one container; tables are emptied before each test.
+// Tagged "integration" (inherited by every subclass): these need Docker and only run with -Pintegration.
+@Tag("integration")
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
