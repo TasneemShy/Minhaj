@@ -7,8 +7,9 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HexFormat;
 
-// Password reset tokens: the raw token only goes into the email; the database stores its SHA-256 hash,
-// so reading the password_reset_token table is not enough to reset someone's password.
+// Opaque single-use tokens: password reset links, refresh tokens (and email verification links).
+// The raw token only goes to the user (email or API response); the database stores its SHA-256 hash,
+// so reading the token tables is not enough to reset a password or mint a session.
 // Lookup is by hash, so no constant-time comparison is needed.
 public final class ResetTokens {
 

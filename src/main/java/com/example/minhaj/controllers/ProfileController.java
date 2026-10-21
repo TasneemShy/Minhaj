@@ -10,6 +10,7 @@ import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.LessonProgressRepository;
 import com.example.minhaj.repositories.UserRepository;
+import com.example.minhaj.services.AuthTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -37,11 +38,13 @@ public class ProfileController {
     private final UserRepository userRepository;
     private final CourseRepository courseRepository;
     private final LessonProgressRepository progressRepository;
+    private final AuthTokenService authTokenService;
     private final BCryptPasswordEncoder passwordEncoder;
 
     public ProfileController(UserRepository userRepository, CourseRepository courseRepository,
-                             LessonProgressRepository progressRepository) {
+                             LessonProgressRepository progressRepository, AuthTokenService authTokenService) {
         this.userRepository = userRepository;
+        this.authTokenService = authTokenService;
         this.courseRepository = courseRepository;
         this.progressRepository = progressRepository;
         this.passwordEncoder = new BCryptPasswordEncoder();
@@ -74,7 +77,9 @@ public class ProfileController {
     }
 
     @Operation(summary = "Change my password",
-            description = "Authenticated users. 400 if the current password is wrong or the new one fails validation.")
+            description = "Authenticated users. Signs out every session: all of the user's refresh tokens are revoked, "
+                    + "so each device logs in again once its access token expires. "
+                    + "400 if the current password is wrong or the new one fails validation.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Password changed", content = @Content(schema = @Schema(ref = MESSAGE_SCHEMA))),
             @ApiResponse(responseCode = "400", ref = BAD_REQUEST),
@@ -90,6 +95,7 @@ public class ProfileController {
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
+        authTokenService.revokeAll(user);
 
         return ResponseEntity.ok(Map.of("message", "Password changed successfully."));
     }

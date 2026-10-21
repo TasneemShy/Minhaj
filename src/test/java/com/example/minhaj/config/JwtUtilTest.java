@@ -10,6 +10,7 @@ import io.jsonwebtoken.security.SignatureException;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Date;
 
@@ -26,7 +27,7 @@ class JwtUtilTest {
     private static final String LEGACY_0_11_TOKEN =
             "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJsZWdhY3lAbWluaGFqLnRlc3QiLCJyb2xlIjoiSU5TVFJVQ1RPUiIsImlhdCI6MTc2MDAwMDAwMCwiZXhwIjo0MTAyNDQ0ODAwfQ.aOmFDjY9KZM2udWSHmL_95OgC3Gp_zDXVdUOhCzLEc0";
 
-    private final JwtUtil jwtUtil = new JwtUtil(SECRET);
+    private final JwtUtil jwtUtil = new JwtUtil(SECRET, Duration.ofMinutes(15));
 
     @Test
     void roundTripPreservesSubjectAndRole() {
@@ -37,7 +38,7 @@ class JwtUtilTest {
         assertThat(claims.getSubject()).isEqualTo("student@minhaj.test");
         assertThat(claims.get("role", String.class)).isEqualTo("STUDENT");
         assertThat(claims.getExpiration().getTime() - claims.getIssuedAt().getTime())
-                .isEqualTo(86_400_000L);
+                .isEqualTo(Duration.ofMinutes(15).toMillis());
     }
 
     @Test
@@ -64,7 +65,7 @@ class JwtUtilTest {
 
     @Test
     void tokenSignedWithDifferentKeyIsRejected() {
-        String foreign = new JwtUtil(OTHER_SECRET).generateToken("admin@minhaj.test", "ADMIN");
+        String foreign = new JwtUtil(OTHER_SECRET, Duration.ofMinutes(15)).generateToken("admin@minhaj.test", "ADMIN");
 
         assertThatThrownBy(() -> jwtUtil.extractAllClaims(foreign))
                 .isInstanceOf(SignatureException.class);

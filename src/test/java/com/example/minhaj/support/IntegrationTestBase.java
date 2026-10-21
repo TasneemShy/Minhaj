@@ -53,7 +53,7 @@ public abstract class IntegrationTestBase {
     @BeforeEach
     void cleanDatabase() {
         jdbc.execute("TRUNCATE users, categories, courses, lessons, reviews, student_courses, "
-                + "password_reset_token, lesson_progress RESTART IDENTITY CASCADE");
+                + "password_reset_token, lesson_progress, refresh_tokens RESTART IDENTITY CASCADE");
         rateLimiter.reset();
     }
 
@@ -69,7 +69,7 @@ public abstract class IntegrationTestBase {
                         .content(json("name", name, "email", email, "password", password)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(body, "$.token");
+        return JsonPath.read(body, "$.accessToken");
     }
 
     protected String login(String email, String password) throws Exception {
@@ -78,7 +78,16 @@ public abstract class IntegrationTestBase {
                         .content(json("email", email, "password", password)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(body, "$.token");
+        return JsonPath.read(body, "$.accessToken");
+    }
+
+    // Full login response: accessToken, refreshToken, expiresIn, role, token.
+    protected String loginResponse(String email, String password) throws Exception {
+        return mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json("email", email, "password", password)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
     }
 
     protected String studentToken(String email) throws Exception {

@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.time.Duration;
 import java.util.Date;
 
 @Component
@@ -15,10 +16,17 @@ public class JwtUtil {
 
     private final SecretKey key;
 
-    private final long EXPIRATION_TIME = 86400000;
+    // Access tokens are not stored or revocable, so they are kept short-lived (app.jwt.access-ttl, default 15 minutes);
+    // clients get new ones from POST /api/auth/refresh.
+    private final Duration accessTtl;
 
-    public JwtUtil(@Value("${jwt.secret}") String secret) {
+    public JwtUtil(@Value("${jwt.secret}") String secret, @Value("${app.jwt.access-ttl:15m}") Duration accessTtl) {
         this.key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
+        this.accessTtl = accessTtl;
+    }
+
+    public Duration getAccessTtl() {
+        return accessTtl;
     }
 
     public String generateToken(String email, String role) {
@@ -26,7 +34,7 @@ public class JwtUtil {
                 .subject(email)
                 .claim("role", role)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
+                .expiration(new Date(System.currentTimeMillis() + accessTtl.toMillis()))
                 .signWith(key)
                 .compact();
     }

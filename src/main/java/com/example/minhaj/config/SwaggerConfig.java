@@ -18,11 +18,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.List;
 
 // OpenAPI document served at /v3/api-docs and rendered by Swagger UI.
 // Controllers reference the shared pieces below by name: the bearer scheme on secured operations,
-// the RFC 9457 error responses, and the small Message / AuthResponse bodies returned as maps.
+// the RFC 9457 error responses, and the small Message body returned as a map.
 @Configuration
 public class SwaggerConfig {
 
@@ -36,7 +35,6 @@ public class SwaggerConfig {
     public static final String TOO_MANY_REQUESTS = "#/components/responses/TooManyRequests";
 
     public static final String MESSAGE_SCHEMA = "#/components/schemas/Message";
-    public static final String AUTH_RESPONSE_SCHEMA = "#/components/schemas/AuthResponse";
 
     private static final String PROBLEM_JSON = "application/problem+json";
     private static final String PROBLEM_SCHEMA = "#/components/schemas/ProblemDetail";
@@ -54,8 +52,9 @@ public class SwaggerConfig {
                         .title("Minhaj API")
                         .description("REST API of the Minhaj learning platform: courses, categories, lessons, enrollment, "
                                 + "lesson progress, reviews, profiles, instructor course management and admin tools.\n\n"
-                                + "Secured operations need a JWT from `POST /api/auth/login` or `POST /api/auth/register`: "
-                                + "click **Authorize** and paste the token. Errors are RFC 9457 Problem Details "
+                                + "Secured operations need an access token (JWT) from `POST /api/auth/login` or "
+                                + "`POST /api/auth/register`: click **Authorize** and paste `accessToken`. Access tokens "
+                                + "are short-lived; get a new one with `POST /api/auth/refresh`. Errors are RFC 9457 Problem Details "
                                 + "(`application/problem+json`).")
                         .version(version))
                 .components(new Components()
@@ -64,16 +63,10 @@ public class SwaggerConfig {
                                 .type(SecurityScheme.Type.HTTP)
                                 .scheme("bearer")
                                 .bearerFormat("JWT")
-                                .description("JWT returned by the login and register endpoints, without the `Bearer ` prefix."))
+                                .description("`accessToken` returned by login, register and refresh, without the `Bearer ` prefix."))
                         .addSchemas("Message", new ObjectSchema()
                                 .description("Confirmation message.")
                                 .addProperty("message", new StringSchema().example("Course deleted successfully!")))
-                        .addSchemas("AuthResponse", new ObjectSchema()
-                                .description("Issued JWT and the role it carries.")
-                                .addProperty("message", new StringSchema().example("Login successful"))
-                                .addProperty("token", new StringSchema().example("eyJhbGciOiJIUzI1NiJ9..."))
-                                .addProperty("role", new StringSchema()._enum(List.of("STUDENT", "INSTRUCTOR", "ADMIN"))
-                                        .example("STUDENT")))
                         .addResponses("BadRequest", problem("Invalid input: failed validation (field messages in `errors`), "
                                 + "a malformed body or parameter, or a rule the request breaks (see `detail`)."))
                         .addResponses("Unauthorized", problem("Missing, invalid or expired JWT."))
