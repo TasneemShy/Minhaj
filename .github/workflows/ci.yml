@@ -58,6 +58,32 @@ jobs:
           path: target/surefire-reports/
           if-no-files-found: ignore
 
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f target/site/jacoco/jacoco.csv ]; then
+            awk -F, 'NR>1 { im+=$4; ic+=$5; bm+=$6; bc+=$7; lm+=$8; lc+=$9 }
+              function pct(c, m) { return (c+m) ? sprintf("%.1f%%", 100*c/(c+m)) : "n/a" }
+              END {
+                print "### Test coverage (JaCoCo)\n";
+                print "| Metric | Covered | Missed | Coverage |";
+                print "| --- | ---: | ---: | ---: |";
+                print "| Lines | " lc " | " lm " | " pct(lc, lm) " |";
+                print "| Branches | " bc " | " bm " | " pct(bc, bm) " |";
+                print "| Instructions | " ic " | " im " | " pct(ic, im) " |";
+              }' target/site/jacoco/jacoco.csv >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No JaCoCo report was generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          if-no-files-found: ignore
+
       - name: Upload application jar
         uses: actions/upload-artifact@v7
         with:

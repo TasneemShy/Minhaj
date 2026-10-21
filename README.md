@@ -71,6 +71,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * Enrolled students can mark lessons as complete (or undo it).
 * Progress is reported per course as completed/total lessons and a percentage, plus an overview across all enrolled courses.
 * Course completion: a course counts as completed once it has at least one lesson and the student has completed every current lesson. See [Course completion](#course-completion).
+* Auto-graded lesson quizzes: a lesson can have a single- or multiple-choice quiz; passing it completes the lesson. See [Quizzes](#quizzes).
 
 ### 5. Reviews & Ratings
 
@@ -108,7 +109,15 @@ Both are public. Endpoints are grouped by tag (Auth, Courses, Categories, Lesson
 >
 > Operations that need a token show a lock icon; public ones don't. The token's role still decides access, so admin endpoints answer 403 for a student token.
 
-A Postman collection is also included in the `postman/` folder.
+## Postman
+
+The `postman/` folder holds a ready-made collection and a local environment, so the API can be demoed without a frontend.
+
+1. In Postman choose **Import** and select `postman/Minhaj.postman_collection.json` and `postman/Minhaj.local.postman_environment.json`, then pick the **Minhaj Local** environment (`baseUrl` = `http://localhost:8080`).
+2. Start the app and run the folder **0. Quick start** with the Collection Runner: register, (verify), login, list courses, enroll, complete a lesson, progress. It needs at least one published course with a lesson: create one as an admin or instructor, or use seed data if the app runs with the optional `demo` profile.
+3. Tokens are stored automatically in collection variables (`accessToken`, `refreshToken`, `adminAccessToken`, `instructorAccessToken`), as are the ids from create responses (`courseId`, `lessonId`, `categoryId`, `reviewId`). Nothing secret is stored in the files; the variables stay local to your Postman.
+
+Enrolling and reviewing need a verified email: paste the token from the verification email into the `verificationToken` variable, or for a local demo run `UPDATE users SET email_verified = TRUE WHERE email = '...';`. Admin requests need the ADMIN role: run `UPDATE users SET role = 'ADMIN' WHERE email = '...';` once, then use **Auth > Login as admin**.
 
 ---
 
@@ -216,7 +225,7 @@ Punctuation and operators the syntax can't use are ignored, so any input returns
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `POST` | `/api/courses/{courseId}/lessons/{lessonId}/complete` | Mark a lesson complete | Enrolled students |
+| `POST` | `/api/courses/{courseId}/lessons/{lessonId}/complete` | Mark a lesson complete (`409` while the lesson has a quiz you have not passed, see [Quizzes](#quizzes)) | Enrolled students |
 | `DELETE` | `/api/courses/{courseId}/lessons/{lessonId}/complete` | Mark a lesson not complete | Enrolled students |
 | `GET` | `/api/courses/{courseId}/progress` | Progress in one course | Enrolled students |
 | `GET` | `/api/my-courses/progress` | Progress across all enrolled courses | Authenticated |
@@ -234,6 +243,62 @@ Completion is derived from lesson progress on every request; nothing extra is st
 * `GET /api/my-courses` is unchanged; use `GET /api/my-courses/completed` (or `completed` in `GET /api/my-courses/progress`) to tell which enrolled courses are finished.
 * When marking a lesson complete finishes the course, the student gets a best-effort congratulations email (sent asynchronously, failures are only logged) linking to `<FRONTEND_URL>/courses/{courseId}/certificate`; the frontend can render that page from `GET /api/courses/{courseId}/completion`. Repeating a completion call sends nothing. Since completion is not stored, a student who undoes a lesson (or gets a new lesson added) and then completes the course again receives another email.
 * Like the other progress endpoints, completion does not require a verified email; enrolling already does.
+
+### Quizzes
+
+A lesson can have one auto-graded quiz. Instructors author it for their own courses (admins for any course); enrolled students take it, and passing it is how they complete that lesson.
+
+#### Authoring
+
+The same endpoints exist under `/api/instructor/...` (Instructor for own courses, Admin for any) and `/api/admin/...` (Admin).
+
+| HTTP Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `PUT` | `/api/instructor/courses/{courseId}/lessons/{lessonId}/quiz` | Create or replace the lesson's quiz (body below); returns it with correct answers | Instructor (owner), Admin |
+| `GET` | `/api/instructor/courses/{courseId}/lessons/{lessonId}/quiz` | The quiz including which options are correct | Instructor (owner), Admin |
+| `DELETE` | `/api/instructor/courses/{courseId}/lessons/{lessonId}/quiz` | Delete the quiz with its questions and all attempts | Instructor (owner), Admin |
+| `GET` | `/api/instructor/courses/{courseId}/lessons/{lessonId}/quiz/analytics` | `attempts`, `studentsAttempted`, `studentsPassed`, `passRate` (% of attempting students who passed), `averageScore` (over all attempts) | Instructor (owner), Admin |
+
+```json
+{
+  "title": "Check your understanding",
+  "passPercentage": 70,
+  "questions": [
+    { "text": "Which keyword declares a constant?", "type": "SINGLE_CHOICE",
+      "options": [ { "text": "final", "correct": true }, { "text": "static", "correct": false } ] },
+    { "text": "Which are primitive types?", "type": "MULTIPLE_CHOICE",
+      "options": [ { "text": "int", "correct": true }, { "text": "boolean", "correct": true }, { "text": "String", "correct": false } ] }
+  ]
+}
+```
+
+* Validation (`400`): at least one question (at most 100); each question 2–20 options; `SINGLE_CHOICE` exactly one correct option, `MULTIPLE_CHOICE` at least one; `passPercentage` 0–100 (default 70). Questions and options are numbered (`position`) in the order sent.
+* `PUT` replaces the whole quiz while nobody has attempted it. Once it has attempts it can't be replaced (`409`), because stored answers and scores refer to its questions; delete it (which deletes the attempts) and create it again.
+
+#### Taking a quiz
+
+| HTTP Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `GET` | `/api/courses/{courseId}/lessons/{lessonId}/quiz` | The quiz with its questions and options, **without** the correct answers | Enrolled students |
+| `POST` | `/api/courses/{courseId}/lessons/{lessonId}/quiz/attempts` | Submit answers (body: `{"answers": [{"questionId": 1, "optionIds": [2]}]}`) and get the graded result | Enrolled students |
+| `GET` | `/api/my-quiz-attempts` | Your own attempts, newest first (`?courseId=` to filter) | Authenticated |
+
+Only enrolled students can see or take a quiz (`403` otherwise), and only on published courses (drafts are `404`). Like the other progress endpoints, no extra email verification is required (enrolling already needs it).
+
+#### Grading rules
+
+* Grading happens on the server. A question scores only if the selected options are **exactly** its correct options: for multiple choice, picking some but not all correct options (or an extra wrong one) scores 0 for that question. Unanswered questions score 0.
+* `scorePercentage` = correct questions / total questions × 100, rounded down; `passed` = `scorePercentage >= passPercentage`.
+* The result lists every question as correct or incorrect with the options you selected. The correct options (`correctOptionIds`) are revealed only when the attempt passes, so failed attempts can't be used to look up the answers.
+* An unknown question ID, an option that belongs to another question, or a question answered twice is a `400` and nothing is stored.
+* Attempts are unlimited and every attempt is kept (the history and the analytics count them all).
+
+#### Progress interaction
+
+* Passing a quiz marks its lesson complete (if it wasn't already), exactly like `POST .../complete`, so it can complete the course and trigger the one-time congratulations email. Failing later never un-completes the lesson.
+* While a lesson has a quiz, `POST .../lessons/{lessonId}/complete` returns `409` until the student has a passing attempt. Undoing a completion (`DELETE .../complete`) is always allowed; afterwards the earlier pass still lets the student complete it manually again.
+* Lessons completed before a quiz was added stay completed. Deleting a quiz keeps everyone's lesson progress.
+* Deleting a lesson or a course deletes its quizzes and attempts too.
 
 ### Reviews
 
@@ -403,6 +468,7 @@ Besides the built-in JVM, Tomcat, HikariCP and HTTP metrics (`http_server_reques
 | `minhaj_ratelimit_rejections_total` | `endpoint`, `limit` = `ip` / `email` | Requests rejected with `429` by the auth rate limits |
 | `minhaj_enrollments_total` | | New course enrollments (re-enrolling is not counted) |
 | `minhaj_course_search_seconds` | | Timer around the course catalog query (`GET /api/courses`) |
+| `minhaj_quiz_attempts_total` | `result` = `passed` / `failed` | Graded quiz attempts |
 
 #### Logs
 
@@ -529,6 +595,8 @@ Tests come in two groups:
 * **Integration tests** (everything extending `IntegrationTestBase`, tagged `integration`) start a throwaway `postgres:15-alpine` container with [Testcontainers](https://testcontainers.com/) (one container shared by the whole run). Flyway migrates it and Hibernate validates the schema, just like at startup. They drive the real API end to end through MockMvc, with real security and JWTs, and every test starts from empty tables.
 * **No local database and no `.env` are needed.** Tests use the `test` profile (`src/test/resources/application-test.properties`), which supplies a test-only JWT secret and dummy mail settings. The mail sender is mocked, so no email is sent, and your local `minhaj_db` is never touched.
 * **Run only what you changed.** Use `./mvnw test -Pintegration -Dtest=ReviewIntegrationTest` for one integration class (the `-Pintegration` is required, or the class is skipped), or `./mvnw test -Dtest=JwtUtilTest` for a fast one.
+
+* **Coverage report.** Run `./mvnw verify -Pintegration` (needs Docker) and open `target/site/jacoco/index.html`; CI uploads the same report as the `jacoco-report` artifact and shows a summary on the run page. With plain `./mvnw verify` the report covers only the fast tests.
 
 ### Database migrations
 

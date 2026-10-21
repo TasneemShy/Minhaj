@@ -6,14 +6,13 @@ import com.example.minhaj.dtos.CourseProgressDTO;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Course;
 import com.example.minhaj.models.Lesson;
-import com.example.minhaj.models.LessonProgress;
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.LessonProgressRepository;
 import com.example.minhaj.repositories.LessonRepository;
 import com.example.minhaj.repositories.UserRepository;
 import com.example.minhaj.services.CourseCompletionService;
-import com.example.minhaj.services.EmailService;
+import com.example.minhaj.services.QuizService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -44,27 +43,29 @@ public class ProgressController {
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
     private final CourseCompletionService completionService;
-    private final EmailService emailService;
+    private final QuizService quizService;
 
     public ProgressController(LessonProgressRepository progressRepository, LessonRepository lessonRepository,
                               CourseRepository courseRepository, UserRepository userRepository,
-                              CourseCompletionService completionService, EmailService emailService) {
+                              CourseCompletionService completionService, QuizService quizService) {
         this.progressRepository = progressRepository;
         this.lessonRepository = lessonRepository;
         this.courseRepository = courseRepository;
         this.userRepository = userRepository;
         this.completionService = completionService;
-        this.emailService = emailService;
+        this.quizService = quizService;
     }
 
     @Operation(summary = "Mark a lesson completed",
             description = "Enrolled students. Idempotent; returns the caller's updated progress in the course. 403 if not enrolled, 404 if the lesson is not in the course. "
+                    + "409 if the lesson has a quiz the caller has not passed (passing the quiz completes the lesson). "
                     + "When this completes the course (its last missing lesson), a congratulations email is sent; repeating the call sends nothing.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Updated course progress", content = @Content(schema = @Schema(implementation = CourseProgressDTO.class))),
             @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
             @ApiResponse(responseCode = "403", ref = FORBIDDEN),
-            @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+            @ApiResponse(responseCode = "404", ref = NOT_FOUND),
+            @ApiResponse(responseCode = "409", ref = CONFLICT)
     })
     @PostMapping("/courses/{courseId}/lessons/{lessonId}/complete")
     public ResponseEntity<?> completeLesson(@PathVariable Long courseId, @PathVariable Long lessonId, Principal principal) {
@@ -82,20 +83,16 @@ public class ProgressController {
 
         Lesson lesson = findLessonInCourse(lessonId, courseId);
 
-        boolean newlyCompleted = !progressRepository.existsByUserIdAndLessonId(student.getId(), lesson.getId());
-        if (newlyCompleted) {
-            progressRepository.save(new LessonProgress(student, lesson));
+        // A lesson with a quiz is completed by passing the quiz; repeating the call on a completed lesson is fine.
+        if (!completionService.isLessonCompleted(student, lesson) && quizService.hasQuiz(lesson)
+                && !quizService.hasPassed(student, lesson)) {
+            throw ApiException.conflict("Lesson " + lessonId + " has a quiz. Pass it (POST /api/courses/" + courseId
+                    + "/lessons/" + lessonId + "/quiz/attempts) to complete the lesson.");
         }
 
-        CourseProgressDTO progress = buildProgress(student, course);
+        completionService.recordLessonCompleted(student, lesson);
 
-        // The course was incomplete while this lesson was missing, so a new row that completes it is the
-        // incomplete -> complete transition. Undoing a lesson and completing it again sends another email.
-        if (newlyCompleted && progress.completed()) {
-            emailService.sendCourseCompletedEmail(student.getEmail(), student.getName(), course.getId(), course.getTitle());
-        }
-
-        return ResponseEntity.ok(progress);
+        return ResponseEntity.ok(buildProgress(student, course));
     }
 
     @Operation(summary = "Mark a lesson not completed",
