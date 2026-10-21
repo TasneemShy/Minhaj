@@ -159,7 +159,8 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "Course statistics",
-            description = "Admin only. Enrollments, lessons, reviews and the share of lessons completed by enrolled students.")
+            description = "Admin only. Enrollments, lessons, reviews, the share of lessons completed by enrolled students, "
+                    + "and how many enrolled students completed the whole course (`completions`, `completionRate`).")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Course statistics"),
             @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
@@ -179,6 +180,9 @@ public class AnalyticsController {
         long possible = enrollments * lessons;
         double completionPercentage = possible == 0 ? 0.0 : Math.round(completed * 1000.0 / possible) / 10.0;
 
+        long completions = analyticsRepository.countCompletionsByCourseId(id);
+        double completionRate = enrollments == 0 ? 0.0 : Math.round(completions * 1000.0 / enrollments) / 10.0;
+
         return new CourseAnalyticsDTO(
                 course.getId(),
                 course.getTitle(),
@@ -188,7 +192,9 @@ public class AnalyticsController {
                 analyticsRepository.countReviewsByCourseId(id),
                 roundRating(analyticsRepository.averageRatingByCourseId(id)),
                 completed,
-                completionPercentage
+                completionPercentage,
+                completions,
+                completionRate
         );
     }
 
