@@ -9,6 +9,7 @@ import com.example.minhaj.dtos.RegisterRequest;
 import com.example.minhaj.dtos.ResendVerificationRequest;
 import com.example.minhaj.dtos.ResetPasswordRequest;
 import com.example.minhaj.dtos.VerifyEmailRequest;
+import com.example.minhaj.metrics.AppMetrics;
 import com.example.minhaj.models.PasswordResetToken;
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.PasswordResetTokenRepository;
@@ -49,16 +50,18 @@ public class AuthController {
     private final EmailVerificationService emailVerificationService;
     private final PasswordResetTokenRepository tokenRepository;
     private final RateLimiter rateLimiter;
+    private final AppMetrics metrics;
 
     public AuthController(UserRepository userRepository, AuthTokenService authTokenService, EmailService emailService,
                           EmailVerificationService emailVerificationService,
-                          PasswordResetTokenRepository tokenRepository, RateLimiter rateLimiter) {
+                          PasswordResetTokenRepository tokenRepository, RateLimiter rateLimiter, AppMetrics metrics) {
         this.userRepository = userRepository;
         this.authTokenService = authTokenService;
         this.emailService = emailService;
         this.emailVerificationService = emailVerificationService;
         this.tokenRepository = tokenRepository;
         this.rateLimiter = rateLimiter;
+        this.metrics = metrics;
         this.passwordEncoder = new BCryptPasswordEncoder();
     }
 
@@ -89,6 +92,7 @@ public class AuthController {
 
         userRepository.save(user);
         emailVerificationService.sendWelcome(user);
+        metrics.registered();
 
         return ResponseEntity.ok(authTokenService.issue(user, "User registered and logged in successfully"));
     }
@@ -113,9 +117,11 @@ public class AuthController {
 
         if (userOptional.isPresent()
                 && passwordEncoder.matches(loginRequest.password(), userOptional.get().getPassword())) {
+            metrics.loginSucceeded();
             return ResponseEntity.ok(authTokenService.issue(userOptional.get(), "Login successful"));
         }
 
+        metrics.loginFailed();
         throw ApiException.unauthorized("Invalid email or password!");
     }
 

@@ -23,16 +23,19 @@ public class SecurityConfig {
     private final JwtRequestFilter jwtRequestFilter;
     private final SecurityProblemHandler securityProblemHandler;
     private final RateLimitFilter rateLimitFilter;
+    private final MetricsTokenFilter metricsTokenFilter;
 
     private final List<String> allowedOrigins;
 
     public SecurityConfig(JwtRequestFilter jwtRequestFilter, SecurityProblemHandler securityProblemHandler,
                           RateLimiter rateLimiter,
                           @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver,
-                          @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
+                          @Value("${app.cors.allowed-origins}") List<String> allowedOrigins,
+                          @Value("${app.metrics.token:}") String metricsToken) {
         this.jwtRequestFilter = jwtRequestFilter;
         this.securityProblemHandler = securityProblemHandler;
         this.rateLimitFilter = new RateLimitFilter(rateLimiter, resolver);
+        this.metricsTokenFilter = new MetricsTokenFilter(metricsToken);
         this.allowedOrigins = allowedOrigins.stream()
                 .map(String::trim)
                 .filter(origin -> !origin.isEmpty())
@@ -59,6 +62,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/categories").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                        // A Prometheus server with the static metrics token, or an admin
+                        .requestMatchers(HttpMethod.GET, MetricsTokenFilter.PATH).hasAnyRole("ADMIN", MetricsTokenFilter.ROLE)
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/instructor/**").hasAnyRole("INSTRUCTOR", "ADMIN")
@@ -69,7 +74,8 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(securityProblemHandler).accessDeniedHandler(securityProblemHandler))
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class)
                 // After CORS (so a 429 still carries CORS headers), before any authentication work
-                .addFilterBefore(rateLimitFilter, JwtRequestFilter.class);
+                .addFilterBefore(rateLimitFilter, JwtRequestFilter.class)
+                .addFilterBefore(metricsTokenFilter, JwtRequestFilter.class);
         return http.build();
     }
 
@@ -78,7 +84,9 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", RequestIdFilter.HEADER));
+        // Lets browser clients read the request ID to show it in error messages
+        configuration.setExposedHeaders(List.of(RequestIdFilter.HEADER));
         // The JWT travels in the Authorization header, not in cookies.
         configuration.setAllowCredentials(false);
         configuration.setMaxAge(3600L);

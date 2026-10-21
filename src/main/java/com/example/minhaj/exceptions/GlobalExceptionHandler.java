@@ -1,5 +1,6 @@
 package com.example.minhaj.exceptions;
 
+import com.example.minhaj.config.RequestIdFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -28,6 +29,8 @@ import java.util.Map;
 
 // Every error leaves the API as RFC 9457 Problem Details (application/problem+json).
 // The base class covers the Spring MVC exceptions; the overrides below only replace their detail messages.
+// Every body carries the request's ID as "requestId" (same as the X-Request-Id header) so users can quote it.
+// Spring Security's 401/403 come through here too, via SecurityProblemHandler.
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
@@ -118,8 +121,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> createResponseEntity(@Nullable Object body, HttpHeaders headers,
                                                           HttpStatusCode status, WebRequest request) {
-        if (body instanceof ProblemDetail problem && problem.getType() == null) {
-            problem.setType(BLANK_TYPE);
+        if (body instanceof ProblemDetail problem) {
+            if (problem.getType() == null) {
+                problem.setType(BLANK_TYPE);
+            }
+            addRequestId(problem);
         }
         return super.createResponseEntity(body, headers, status, request);
     }
@@ -128,6 +134,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static ProblemDetail problemDetail(HttpStatusCode status, String detail) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setType(BLANK_TYPE);
+        addRequestId(problem);
         return problem;
+    }
+
+    private static void addRequestId(ProblemDetail problem) {
+        String requestId = RequestIdFilter.current();
+        if (requestId != null && (problem.getProperties() == null || !problem.getProperties().containsKey("requestId"))) {
+            problem.setProperty("requestId", requestId);
+        }
     }
 }

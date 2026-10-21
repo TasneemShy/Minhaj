@@ -1,7 +1,9 @@
 package com.example.minhaj.service;
 
 import com.example.minhaj.exceptions.RateLimitExceededException;
+import com.example.minhaj.metrics.AppMetrics;
 import com.example.minhaj.services.RateLimiter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 
@@ -12,8 +14,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RateLimiterTest {
 
-    private static RateLimiter limiter(boolean trustForwardedFor) {
-        return new RateLimiter(true, 2, 5, 3, Duration.ofMinutes(1), trustForwardedFor, 1000);
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final AppMetrics metrics = new AppMetrics(registry);
+
+    private RateLimiter limiter(boolean trustForwardedFor) {
+        return new RateLimiter(true, 2, 5, 3, Duration.ofMinutes(1), trustForwardedFor, 1000, metrics);
     }
 
     @Test
@@ -41,10 +46,34 @@ class RateLimiterTest {
 
     @Test
     void disabledLimiterNeverThrows() {
-        RateLimiter limiter = new RateLimiter(false, 1, 1, 1, Duration.ofMinutes(1), false, 1000);
+        RateLimiter limiter = new RateLimiter(false, 1, 1, 1, Duration.ofMinutes(1), false, 1000, metrics);
         for (int i = 0; i < 5; i++) {
             limiter.checkLogin("a@b.c", "10.0.0.1");
             limiter.checkIp("/api/auth/register", "10.0.0.1");
         }
+    }
+
+    @Test
+    void rejectionsAreCountedPerEndpointAndLimit() {
+        RateLimiter limiter = limiter(false);
+        for (int i = 0; i < 3; i++) {
+            limiter.checkIp("/api/auth/register", "10.0.0.1");
+        }
+        assertThatThrownBy(() -> limiter.checkIp("/api/auth/register", "10.0.0.1"))
+                .isInstanceOf(RateLimitExceededException.class);
+        limiter.checkLogin("a@b.c", "10.0.0.1");
+        limiter.checkLogin("a@b.c", "10.0.0.1");
+        assertThatThrownBy(() -> limiter.checkLogin("a@b.c", "10.0.0.1"))
+                .isInstanceOf(RateLimitExceededException.class);
+
+        assertThat(rejections("/api/auth/register", "ip")).isEqualTo(1.0);
+        assertThat(rejections("/api/auth/login", "email")).isEqualTo(1.0);
+        assertThat(registry.find("minhaj.ratelimit.rejections").tag("endpoint", "/api/auth/login").tag("limit", "ip")
+                .counter()).isNull();
+    }
+
+    private double rejections(String endpoint, String limit) {
+        return registry.get("minhaj.ratelimit.rejections").tag("endpoint", endpoint).tag("limit", limit)
+                .counter().count();
     }
 }

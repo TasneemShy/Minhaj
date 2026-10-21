@@ -107,10 +107,13 @@ class AuthIntegrationTest extends IntegrationTestBase {
         String email = uniqueEmail("login");
         studentToken(email);
 
-        String wrongPassword = mockMvc.perform(withJson(post("/api/auth/login"), null, json("email", email, "password", "wrong-password")))
+        // Same request ID on both, so only a real difference between the two bodies can fail the comparison
+        String wrongPassword = mockMvc.perform(withJson(post("/api/auth/login"), null, json("email", email, "password", "wrong-password"))
+                        .header("X-Request-Id", "same-id"))
                 .andExpect(status().isUnauthorized())
                 .andReturn().getResponse().getContentAsString();
-        String unknownEmail = mockMvc.perform(withJson(post("/api/auth/login"), null, json("email", uniqueEmail("ghost"), "password", PASSWORD)))
+        String unknownEmail = mockMvc.perform(withJson(post("/api/auth/login"), null, json("email", uniqueEmail("ghost"), "password", PASSWORD))
+                        .header("X-Request-Id", "same-id"))
                 .andExpect(status().isUnauthorized())
                 .andReturn().getResponse().getContentAsString();
 

@@ -2,12 +2,18 @@ package com.example.minhaj.web;
 
 import com.example.minhaj.config.JwtRequestFilter;
 import com.example.minhaj.config.JwtUtil;
+import com.example.minhaj.config.MonitoringConfig;
+import com.example.minhaj.config.RequestIdFilter;
 import com.example.minhaj.config.SecurityConfig;
 import com.example.minhaj.config.SecurityProblemHandler;
 import com.example.minhaj.controllers.CategoryController;
+import com.example.minhaj.metrics.AppMetrics;
 import com.example.minhaj.repositories.CategoryRepository;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.services.RateLimiter;
+import com.jayway.jsonpath.JsonPath;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -24,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
@@ -34,6 +41,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -41,7 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // security chain and JWT filter in front of a controller whose repositories are mocked.
 @WebMvcTest(CategoryController.class)
 @Import({SecurityConfig.class, SecurityProblemHandler.class, JwtRequestFilter.class, JwtUtil.class, RateLimiter.class,
-        GlobalExceptionHandlerWebMvcTest.JwtFilterOnlyInSecurityChain.class})
+        AppMetrics.class, MonitoringConfig.class, GlobalExceptionHandlerWebMvcTest.JwtFilterOnlyInSecurityChain.class})
 @ActiveProfiles("test")
 class GlobalExceptionHandlerWebMvcTest {
 
@@ -70,6 +78,12 @@ class GlobalExceptionHandlerWebMvcTest {
             FilterRegistrationBean<JwtRequestFilter> registration = new FilterRegistrationBean<>(filter);
             registration.setEnabled(false);
             return registration;
+        }
+
+        // RateLimiter counts rejections; the slice has no metrics auto-configuration
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
         }
     }
 
@@ -188,5 +202,31 @@ class GlobalExceptionHandlerWebMvcTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.detail").value("A category with this name already exists."));
+    }
+
+    @Test
+    void errorBodiesCarryTheRequestIdFromTheHeader() throws Exception {
+        when(categoryRepository.findById(anyLong())).thenReturn(Optional.empty());
+
+        mockMvc.perform(delete("/api/admin/categories/42")
+                        .header("Authorization", adminBearer())
+                        .header(RequestIdFilter.HEADER, "support-ticket-7"))
+                .andExpect(status().isNotFound())
+                .andExpect(header().string(RequestIdFilter.HEADER, "support-ticket-7"))
+                .andExpect(jsonPath("$.requestId").value("support-ticket-7"));
+    }
+
+    @Test
+    void securityErrorsCarryTheGeneratedRequestId() throws Exception {
+        var response = mockMvc.perform(post("/api/admin/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"x\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.requestId").isNotEmpty())
+                .andReturn().getResponse();
+
+        // Spring Security's 401 goes through SecurityProblemHandler to GlobalExceptionHandler, which adds the ID
+        String requestId = JsonPath.read(response.getContentAsString(), "$.requestId");
+        assertThat(response.getHeader(RequestIdFilter.HEADER)).isEqualTo(requestId);
     }
 }
