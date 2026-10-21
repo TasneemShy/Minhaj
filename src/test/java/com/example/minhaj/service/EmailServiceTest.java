@@ -5,10 +5,10 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.example.minhaj.services.EmailService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
@@ -27,8 +27,12 @@ public class EmailServiceTest {
     @Mock
     private JavaMailSender mailSender;
 
-    @InjectMocks
     private EmailService emailService;
+
+    @BeforeEach
+    void setUp() {
+        emailService = new EmailService(mailSender, "https://app.example.com");
+    }
 
     @Test
     void testSendWelcomeEmail() {
@@ -67,6 +71,30 @@ public class EmailServiceTest {
         assertEquals(Level.ERROR, event.getLevel());
         assertTrue(event.getFormattedMessage().contains("welcome"));
         assertEquals(failure.getMessage(), event.getThrowableProxy().getMessage());
+    }
+
+    @Test
+    void testSendPasswordResetEmailLinksToFrontend() {
+        emailService.sendPasswordResetEmail("test@example.com", "abc-_123");
+
+        ArgumentCaptor<SimpleMailMessage> messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(messageCaptor.capture());
+
+        SimpleMailMessage sentMessage = messageCaptor.getValue();
+        assertEquals("test@example.com", sentMessage.getTo()[0]);
+        assertTrue(sentMessage.getText().contains("https://app.example.com/reset-password?token=abc-_123\n"),
+                sentMessage.getText());
+    }
+
+    @Test
+    void testSendPasswordResetEmailTrimsTrailingSlashAndEncodesToken() {
+        new EmailService(mailSender, "https://app.example.com/").sendPasswordResetEmail("test@example.com", "a+b/c=");
+
+        ArgumentCaptor<SimpleMailMessage> messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(messageCaptor.capture());
+
+        assertTrue(messageCaptor.getValue().getText().contains("https://app.example.com/reset-password?token=a%2Bb%2Fc%3D\n"),
+                messageCaptor.getValue().getText());
     }
 
     @Test
