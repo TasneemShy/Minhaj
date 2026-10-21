@@ -7,7 +7,6 @@ import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Course;
 import com.example.minhaj.models.Review;
 import com.example.minhaj.models.User;
-import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.UserRepository;
 import com.example.minhaj.repositories.ReviewRepository;
 import com.example.minhaj.services.CourseService;
@@ -40,14 +39,12 @@ public class ReviewController {
     private static final Sort NEWEST_FIRST = Sort.by(Sort.Order.desc("createdAt").nullsLast(), Sort.Order.desc("id"));
 
     private final ReviewRepository reviewRepository;
-    private final CourseRepository courseRepository;
     private final UserRepository userRepository;
     private final CourseService courseService;
 
-    public ReviewController(ReviewRepository reviewRepository, CourseRepository courseRepository, UserRepository userRepository,
+    public ReviewController(ReviewRepository reviewRepository, UserRepository userRepository,
                             CourseService courseService){
         this.reviewRepository = reviewRepository;
-        this.courseRepository = courseRepository;
         this.userRepository = userRepository;
         this.courseService = courseService;
     }
@@ -133,7 +130,7 @@ public class ReviewController {
         review.setUser(student);
 
         Review savedReview = reviewRepository.save(review);
-        refreshCourseRating(course);
+        courseService.refreshRating(course);
 
         return ResponseEntity.ok(ReviewDTO.from(savedReview));
     }
@@ -167,7 +164,7 @@ public class ReviewController {
         review.setRating(request.rating());
 
         Review savedReview = reviewRepository.save(review);
-        refreshCourseRating(review.getCourse());
+        courseService.refreshRating(review.getCourse());
 
         return ResponseEntity.ok(ReviewDTO.from(savedReview));
     }
@@ -201,18 +198,9 @@ public class ReviewController {
 
         Course course = review.getCourse();
         reviewRepository.delete(review);
-        refreshCourseRating(course);
+        courseService.refreshRating(course);
 
         return ResponseEntity.ok(Map.of("message", "Review deleted successfully."));
     }
-
-    // Recompute from the reviews table instead of adjusting a running total, so the values can't drift.
-    private void refreshCourseRating(Course course) {
-        Double average = reviewRepository.findAverageRatingByCourseId(course.getId());
-        long count = reviewRepository.countByCourseId(course.getId());
-
-        course.setReviewCount((int) count);
-        course.setAverageRating(average == null ? 0.0 : Math.round(average * 10) / 10.0);
-        courseRepository.save(course);
-    }
 }
+

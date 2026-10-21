@@ -560,6 +560,28 @@ Prerequisites: JDK 25 and PostgreSQL running on port `5432` with a `minhaj_db` d
    ./mvnw spring-boot:run
    ```
 
+### Demo data (optional)
+
+To get something to explore on a fresh database, start the app with the `demo` Spring profile:
+
+```bash
+SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run
+```
+
+With Docker, Compose does not pass shell variables into the container, so add `SPRING_PROFILES_ACTIVE=demo` to `.env` (or uncomment the line in `docker-compose.yml`), then run `docker compose up`. Remove it again to go back to normal.
+
+On startup, `DemoDataSeeder` (`src/main/java/com/example/minhaj/seed`) adds, in one transaction after Flyway:
+
+* 6 users: `demo-admin@example.com` (ADMIN), `demo-instructor1@example.com` and `demo-instructor2@example.com` (INSTRUCTOR), `demo-student1@example.com` to `demo-student3@example.com` (STUDENT).
+* 4 categories (one Arabic, `البرمجة`), 6 courses in Arabic and English, free and paid, with 3–5 lessons each (placeholder video URLs). One course is left as a DRAFT, so it is hidden from the public catalog.
+* Enrollments, lesson progress and reviews (course ratings are computed as usual). `demo-student1@example.com` has completed every lesson of *أساسيات البرمجة بلغة بايثون*, so `GET /api/courses/{id}/completion` returns a certificate.
+
+All demo accounts share the password `demo-password-123` (override with `app.demo.password`) and are marked as email-verified without any email being sent; the seeder sends no emails at all. The accounts and password are logged once at startup at WARN level.
+
+It runs only once: if `demo-admin@example.com` already exists, it does nothing. It is meant for an empty database; if a category with the same name already exists, seeding fails, nothing is written and the app does not start.
+
+> **Demo only.** The password is public and the accounts skip email verification. Never enable the `demo` profile in production or against a database with real users.
+
 ### Running tests
 
 Tests come in two groups:

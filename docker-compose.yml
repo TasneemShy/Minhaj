@@ -31,6 +31,8 @@ services:
       - SPRING_DATASOURCE_PASSWORD=root
       # JSON (ECS) console logs for log shippers; METRICS_TOKEN itself comes from .env
       - LOG_FORMAT=json
+      # Demo seed data (fake accounts, public password; see README "Demo data"). Never in production.
+      # - SPRING_PROFILES_ACTIVE=demo
     depends_on:
       db:
         condition: service_healthy
