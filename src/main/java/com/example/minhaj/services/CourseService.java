@@ -136,6 +136,17 @@ public class CourseService {
         return courseRepository.save(existingCourse);
     }
 
+    // Called after every review change. Recompute from the reviews table instead of adjusting a running total,
+    // so the values can't drift.
+    public void refreshRating(Course course) {
+        Double average = reviewRepository.findAverageRatingByCourseId(course.getId());
+        long count = reviewRepository.countByCourseId(course.getId());
+
+        course.setReviewCount((int) count);
+        course.setAverageRating(average == null ? 0.0 : Math.round(average * 10) / 10.0);
+        courseRepository.save(course);
+    }
+
     // Removes everything that references the course first, otherwise Postgres rejects the delete
     // on the foreign keys. Progress goes before lessons because it references lessons.
     @Transactional
