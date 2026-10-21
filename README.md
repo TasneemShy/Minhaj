@@ -29,7 +29,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * **DTO Pattern with Java Records:** JPA entities never cross the API boundary. Request bodies bind to `record` types with Bean Validation (`CourseRequest`, `LessonRequest`, `ReviewRequest`, `CategoryRequest`, …), so clients cannot set server-owned fields such as `id`, `averageRating`, `reviewCount`, `lessonCount`, `createdAt` or `instructor`. Responses are `record` DTOs (`CourseDTO`, `LessonDTO`, `ReviewDTO`, `CategoryDTO`, `UserDTO`) built with small static `from(...)` factories; reviews name their author by `authorId` and `authorName` only.
 * **Centralized Exception Handling:** `@RestControllerAdvice` (`GlobalExceptionHandler`) and Spring Security's entry point / access-denied handler return every error as RFC 9457 Problem Details (see [Error format](#error-format)).
 * **JPA Auditing:** Automatic `createdAt` / `updatedAt` timestamps (`@CreatedDate`, `@LastModifiedDate`).
-* **Pagination, Filtering & Sorting:** Course listing combines Spring Data's `Pageable` with JPA `Specification`s (`CourseSpecifications`) so any mix of search, category, price, and rating filters becomes a single query.
+* **Pagination, Filtering & Sorting:** Course listing combines Spring Data's `Pageable` with JPA `Specification`s (`CourseSpecifications`) so any mix of search, category, price, and rating filters becomes a single query. Search is Postgres full-text search on a generated, GIN-indexed `tsvector` column (`V5__course_search.sql`), called from the Criteria query through Hibernate pattern functions (`CourseSearchFunctions`) with the user's text always bound as a parameter.
 * **Entity Relationships:** Category → Courses (one-to-many), Course → Lessons (one-to-many), Students ↔ Courses (many-to-many enrollment), Course → Reviews and User → Reviews (one-to-many), and per-student lesson completion records (`LessonProgress`).
 * **CORS:** Origin allow-list (`CORS_ALLOWED_ORIGINS`) configured in `SecurityConfig`; wildcards are rejected.
 * **Stateless JWT Security:** A request filter validates Bearer tokens and applies role-based route rules.
@@ -53,7 +53,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 
 * Full CRUD for administrators to create, update, and delete courses.
 * Free and paid courses (free courses always have a price of `0`).
-* Paginated catalog browsing with case-insensitive search, filters (category, free/paid, price range, minimum rating), and sorting.
+* Paginated catalog browsing with full-text search over titles and descriptions (Arabic and English, phrases, `or`, exclusions, prefix matching, relevance ranking), filters (category, free/paid, price range, minimum rating), and sorting.
 * Courses can be grouped into categories that administrators manage.
 * Instructors create and manage their own courses and lessons; a course shows its instructor's ID and name (never their email).
 * Draft/published lifecycle: new courses are private drafts until their instructor (or an admin) publishes them (see [Course lifecycle](#course-lifecycle-draft--published)).
@@ -178,14 +178,29 @@ The client IP is the TCP peer address (`request.getRemoteAddr()`). `X-Forwarded-
 | Parameter | Example | Description |
 | --- | --- | --- |
 | `page`, `size` | `page=0&size=10` | Pagination (defaults `0` and `10`) |
-| `search` | `search=spring` | Case-insensitive title search |
+| `search` | `search=spring boot` | Full-text search in the title and description; see [Search syntax](#search-syntax). At most 200 characters (`400` otherwise) |
 | `categoryId` | `categoryId=2` | Only courses in this category |
 | `free` | `free=true` | Only free (`true`) or paid (`false`) courses |
 | `minPrice`, `maxPrice` | `minPrice=10&maxPrice=50` | Price range (inclusive) |
 | `minRating` | `minRating=4` | Minimum average rating |
 | `instructorId` | `instructorId=3` | Only courses taught by this instructor |
-| `sortBy` | `sortBy=price` | `createdAt` (default), `title`, `price`, `averageRating`, or `reviewCount` |
+| `sortBy` | `sortBy=price` | `relevance` (default when `search` is given), `createdAt` (default otherwise), `title`, `price`, `averageRating`, or `reviewCount` |
 | `direction` | `direction=asc` | `asc` or `desc` (default) |
+
+#### Search syntax
+
+`search` matches whole words in a course's title and description, case-insensitively. It works the same for Arabic and English: words are not stemmed, so `lesson` does not find `lessons` by itself (prefix matching usually covers that).
+
+| Query | Matches courses that contain |
+| --- | --- |
+| `spring boot` | both words, anywhere in the title or description |
+| `spri`, `spring bo` | words starting with these letters (only for plain words: letters, digits and spaces) |
+| `"spring boot"` | the exact phrase |
+| `java or kotlin` | either word |
+| `spring -security` | `spring` but not `security` |
+| `البرمجة` | the Arabic word |
+
+Punctuation and operators the syntax can't use are ignored, so any input returns `200` (an empty page when nothing matches). With `search`, results are sorted by relevance unless `sortBy` says otherwise: a match in the title ranks above a match only in the description, and ties go to the newest course. `sortBy=relevance` without `search` sorts by `createdAt`. Drafts are never returned.
 
 ### Profile (`/api/profile`)
 
