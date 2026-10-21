@@ -44,6 +44,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * User registration with BCrypt password hashing and a welcome email that carries an email verification link. Unverified users can log in but cannot enroll or post reviews until they confirm their address.
 * Login that issues a short-lived access token (signed JWT, 15 minutes by default) and a long-lived refresh token (14 days). Refresh tokens are single-use and rotated on every refresh, stored only as SHA-256 hashes, and revoked on logout and on password change or reset; reusing an old one signs the user out everywhere. Tokens stay valid across restarts because the signing key comes from configuration.
 * Rate limiting on login, registration and password reset (429 with `Retry-After`).
+* Hourly cleanup of expired and revoked tokens: expired email verification and reset tokens are deleted, refresh tokens 7 days after they expire or are revoked (kept that long so reuse can still be detected). Configured with `app.token-cleanup.*`.
 * Forgot-password flow: emails a one-time reset link valid for 15 minutes. Only a SHA-256 hash of the token is stored in the database.
 * Role-based access control with three roles: students (`STUDENT`, the default on registration), instructors (`INSTRUCTOR`), and administrators (`ADMIN`). Administrators assign roles.
 * User profile: view your account, update your name, change your password (current password required), and unenroll from courses (which also clears your progress in them).
