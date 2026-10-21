@@ -6,6 +6,7 @@ import com.example.minhaj.models.Course;
 import com.example.minhaj.models.CourseStatus;
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.CourseRepository;
+import com.example.minhaj.repositories.CourseSearchQuery;
 import com.example.minhaj.repositories.CourseSpecifications;
 import com.example.minhaj.repositories.UserRepository;
 import com.example.minhaj.services.CourseService;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import com.example.minhaj.dtos.CourseDTO;
 import com.example.minhaj.dtos.CourseRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,7 +43,10 @@ import static com.example.minhaj.config.SwaggerConfig.*;
 @Tag(name = "Courses", description = "Course catalogue, admin course management and student enrollment.")
 public class CourseController {
 
-    private static final List<String> SORTABLE_FIELDS = List.of("createdAt", "title", "price", "averageRating", "reviewCount");
+    private static final String RELEVANCE = "relevance";
+    private static final List<String> SORTABLE_FIELDS =
+            List.of(RELEVANCE, "createdAt", "title", "price", "averageRating", "reviewCount");
+    private static final int MAX_SEARCH_LENGTH = 200;
 
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
@@ -63,16 +68,25 @@ public class CourseController {
                     + "`number`, `size`, ...). Drafts never appear here. All filters are optional and combine with AND.")
     @Parameter(name = "page", in = ParameterIn.QUERY, description = "Zero-based page index", example = "0")
     @Parameter(name = "size", in = ParameterIn.QUERY, description = "Page size", example = "10")
-    @Parameter(name = "search", in = ParameterIn.QUERY, description = "Case-insensitive text contained in the title", example = "java")
+    @Parameter(name = "search", in = ParameterIn.QUERY,
+            description = "Full-text search in the title and description (case-insensitive, Arabic and English; "
+                    + "no stemming). Words are AND-ed: `spring boot`. Web-search syntax: `\"spring boot\"` for a phrase, "
+                    + "`java or kotlin` for either word, `java -spring` to exclude a word. Plain words also match "
+                    + "as prefixes, so `spri` finds Spring. Text the syntax can't use is ignored (no error). "
+                    + "At most " + MAX_SEARCH_LENGTH + " characters.",
+            example = "spring boot")
     @Parameter(name = "categoryId", in = ParameterIn.QUERY, description = "Only courses in this category", example = "1")
     @Parameter(name = "free", in = ParameterIn.QUERY, description = "true for free courses only, false for paid only")
     @Parameter(name = "minPrice", in = ParameterIn.QUERY, description = "Lowest price (inclusive)", example = "0")
     @Parameter(name = "maxPrice", in = ParameterIn.QUERY, description = "Highest price (inclusive)", example = "50")
     @Parameter(name = "minRating", in = ParameterIn.QUERY, description = "Lowest average rating (inclusive, 0-5)", example = "4")
     @Parameter(name = "instructorId", in = ParameterIn.QUERY, description = "Only courses taught by this instructor", example = "2")
-    @Parameter(name = "sortBy", in = ParameterIn.QUERY, description = "Field to sort by",
-            schema = @Schema(type = "string", defaultValue = "createdAt",
-                    allowableValues = {"createdAt", "title", "price", "averageRating", "reviewCount"}))
+    @Parameter(name = "sortBy", in = ParameterIn.QUERY,
+            description = "Field to sort by. Defaults to `relevance` (best match first; title matches rank above "
+                    + "description matches) when `search` is given, otherwise `createdAt`. `relevance` without "
+                    + "`search` sorts by `createdAt`.",
+            schema = @Schema(type = "string",
+                    allowableValues = {"relevance", "createdAt", "title", "price", "averageRating", "reviewCount"}))
     @Parameter(name = "direction", in = ParameterIn.QUERY, description = "Sort direction; anything other than asc sorts descending",
             schema = @Schema(type = "string", defaultValue = "desc", allowableValues = {"asc", "desc"}))
     @ApiResponses({
@@ -90,19 +104,39 @@ public class CourseController {
             @RequestParam(required = false) Double maxPrice,
             @RequestParam(required = false) Double minRating,
             @RequestParam(required = false) Long instructorId,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(required = false) String sortBy,
             @RequestParam(defaultValue = "desc") String direction) {
 
-        if (!SORTABLE_FIELDS.contains(sortBy)) {
+        if (sortBy != null && !SORTABLE_FIELDS.contains(sortBy)) {
             throw ApiException.badRequest("sortBy must be one of: " + String.join(", ", SORTABLE_FIELDS));
         }
+        if (search != null && search.length() > MAX_SEARCH_LENGTH) {
+            throw ApiException.badRequest("search must be at most " + MAX_SEARCH_LENGTH + " characters");
+        }
 
-        Sort sort = Sort.by("asc".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
-        Pageable pageable = PageRequest.of(page, size, sort);
+        CourseSearchQuery searchQuery = CourseSearchQuery.parse(search);
+        if (sortBy == null) {
+            sortBy = searchQuery != null ? RELEVANCE : "createdAt";
+        } else if (sortBy.equals(RELEVANCE) && searchQuery == null) {
+            sortBy = "createdAt";
+        }
 
-        Page<Course> courses = courseRepository.findAll(
-                CourseSpecifications.withFilters(search, categoryId, free, minPrice, maxPrice, minRating, instructorId)
-                        .and(CourseSpecifications.hasStatus(CourseStatus.PUBLISHED)), pageable);
+        boolean ascending = "asc".equalsIgnoreCase(direction);
+        Specification<Course> spec = CourseSpecifications
+                .withFilters(searchQuery, categoryId, free, minPrice, maxPrice, minRating, instructorId)
+                .and(CourseSpecifications.hasStatus(CourseStatus.PUBLISHED));
+
+        // Relevance is a computed rank, not an entity field: the specification orders by it, so the Pageable
+        // stays unsorted (a Sort on it would replace that ordering).
+        Pageable pageable;
+        if (sortBy.equals(RELEVANCE)) {
+            spec = spec.and(CourseSpecifications.orderByRelevance(searchQuery, ascending));
+            pageable = PageRequest.of(page, size);
+        } else {
+            pageable = PageRequest.of(page, size, Sort.by(ascending ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy));
+        }
+
+        Page<Course> courses = courseRepository.findAll(spec, pageable);
 
         Page<CourseDTO> courseDTOs = courses.map(CourseDTO::from);
 
