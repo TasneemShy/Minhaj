@@ -19,6 +19,8 @@ public class AppMetrics {
     private final Counter registrations;
     private final Counter enrollments;
     private final Timer courseSearch;
+    private final Counter quizPassed;
+    private final Counter quizFailed;
 
     public AppMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -32,6 +34,15 @@ public class AppMetrics {
                 .register(registry);
         this.courseSearch = Timer.builder("minhaj.course.search")
                 .description("Time spent running the course catalog query (GET /api/courses)")
+                .register(registry);
+        this.quizPassed = quizCounter("passed");
+        this.quizFailed = quizCounter("failed");
+    }
+
+    private Counter quizCounter(String result) {
+        return Counter.builder("minhaj.quiz.attempts")
+                .description("Graded quiz attempts by result")
+                .tag("result", result)
                 .register(registry);
     }
 
@@ -56,6 +67,10 @@ public class AppMetrics {
 
     public void enrolled() {
         enrollments.increment();
+    }
+
+    public void quizSubmitted(boolean passed) {
+        (passed ? quizPassed : quizFailed).increment();
     }
 
     // endpoint is one of RateLimitFilter's fixed paths; limit is "ip" or "email" (the per-email login limit).
