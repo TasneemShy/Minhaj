@@ -95,10 +95,14 @@ When the service is running, explore and test the endpoints in the browser:
 * **Swagger UI:** [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
 * **OpenAPI Specification JSON:** [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 
+Both are public. Endpoints are grouped by tag (Auth, Courses, Categories, Lessons, Progress, Reviews, Profile, Instructor, Admin – Users, Admin – Analytics, System). Each operation states who may call it (public, authenticated, enrolled students, owning instructor or admin, admin) and lists the status codes it returns. Error responses share one `ProblemDetail` schema (RFC 9457, `application/problem+json`; see [Error format](#error-format)). Request fields carry descriptions and examples, and query parameters such as `sortBy` on `GET /api/courses` list their allowed values. The version shown is the Maven project version.
+
 > **Testing protected routes in Swagger:**
-> 1. Call `POST /api/auth/login` with your credentials to get a token.
+> 1. Call `POST /api/auth/login` (or `/api/auth/register`) to get a token.
 > 2. Click the **Authorize** button at the top of the Swagger page.
 > 3. Paste the JWT token (without the `Bearer ` prefix) into the `Value` field and submit.
+>
+> Operations that need a token show a lock icon; public ones don't. The token's role still decides access, so admin endpoints answer 403 for a student token.
 
 A Postman collection is also included in the `postman/` folder.
 
