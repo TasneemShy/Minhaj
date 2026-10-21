@@ -11,6 +11,13 @@ import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.LessonProgressRepository;
 import com.example.minhaj.repositories.LessonRepository;
 import com.example.minhaj.repositories.UserRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,8 +25,12 @@ import java.security.Principal;
 import java.util.Comparator;
 import java.util.List;
 
+import static com.example.minhaj.config.SwaggerConfig.*;
+
 @RestController
 @RequestMapping("/api")
+@Tag(name = "Progress", description = "Lesson completion tracking for enrolled students.")
+@SecurityRequirement(name = BEARER_AUTH)
 public class ProgressController {
 
     private final LessonProgressRepository progressRepository;
@@ -35,6 +46,14 @@ public class ProgressController {
         this.userRepository = userRepository;
     }
 
+    @Operation(summary = "Mark a lesson completed",
+            description = "Enrolled students. Idempotent; returns the caller's updated progress in the course. 403 if not enrolled, 404 if the lesson is not in the course.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Updated course progress", content = @Content(schema = @Schema(implementation = CourseProgressDTO.class))),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN),
+            @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    })
     @PostMapping("/courses/{courseId}/lessons/{lessonId}/complete")
     public ResponseEntity<?> completeLesson(@PathVariable Long courseId, @PathVariable Long lessonId, Principal principal) {
 
@@ -58,6 +77,14 @@ public class ProgressController {
         return ResponseEntity.ok(buildProgress(student, course));
     }
 
+    @Operation(summary = "Mark a lesson not completed",
+            description = "Enrolled students. Idempotent; returns the caller's updated progress in the course.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Updated course progress", content = @Content(schema = @Schema(implementation = CourseProgressDTO.class))),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN),
+            @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    })
     @DeleteMapping("/courses/{courseId}/lessons/{lessonId}/complete")
     public ResponseEntity<?> uncompleteLesson(@PathVariable Long courseId, @PathVariable Long lessonId, Principal principal) {
 
@@ -80,6 +107,14 @@ public class ProgressController {
         return ResponseEntity.ok(buildProgress(student, course));
     }
 
+    @Operation(summary = "Get my progress in a course",
+            description = "Enrolled students. 403 if the caller is not enrolled.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Course progress", content = @Content(schema = @Schema(implementation = CourseProgressDTO.class))),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN),
+            @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    })
     @GetMapping("/courses/{courseId}/progress")
     public ResponseEntity<?> getCourseProgress(@PathVariable Long courseId, Principal principal) {
 
@@ -97,6 +132,12 @@ public class ProgressController {
         return ResponseEntity.ok(buildProgress(student, course));
     }
 
+    @Operation(summary = "Get my progress in all enrolled courses",
+            description = "Authenticated users. One entry per enrolled course, ordered by course id.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Progress per course"),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED)
+    })
     @GetMapping("/my-courses/progress")
     public ResponseEntity<List<CourseProgressDTO>> getMyProgress(Principal principal) {
 
