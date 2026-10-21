@@ -18,7 +18,7 @@ class OpenApiDocsIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.info.title").value("Minhaj API"))
                 .andExpect(jsonPath("$.tags[*].name").value(containsInAnyOrder(
                         "Auth", "Courses", "Categories", "Lessons", "Progress", "Reviews", "Profile",
-                        "Instructor", "Admin – Users", "Admin – Analytics", "System")));
+                        "Instructor", "Quizzes", "Quiz authoring", "Admin – Users", "Admin – Analytics", "System")));
     }
 
     @Test

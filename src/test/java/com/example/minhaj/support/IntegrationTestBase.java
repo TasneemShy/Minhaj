@@ -57,7 +57,8 @@ public abstract class IntegrationTestBase {
     void cleanDatabase() {
         jdbc.execute("TRUNCATE users, categories, courses, lessons, reviews, student_courses, "
                 + "password_reset_token, lesson_progress, refresh_tokens, "
-                + "email_verification_tokens RESTART IDENTITY CASCADE");
+                + "email_verification_tokens, quizzes, quiz_questions, quiz_options, quiz_attempts, "
+                + "quiz_attempt_answers RESTART IDENTITY CASCADE");
         rateLimiter.reset();
     }
 
