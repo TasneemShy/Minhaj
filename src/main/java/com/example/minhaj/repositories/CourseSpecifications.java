@@ -1,6 +1,7 @@
 package com.example.minhaj.repositories;
 
 import com.example.minhaj.models.Course;
+import com.example.minhaj.models.CourseStatus;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -10,6 +11,11 @@ import java.util.List;
 public final class CourseSpecifications {
 
     private CourseSpecifications() {}
+
+    // Only courses with this status; a null status matches every course.
+    public static Specification<Course> hasStatus(CourseStatus status) {
+        return (root, query, cb) -> status == null ? cb.conjunction() : cb.equal(root.get("status"), status);
+    }
 
     // Builds a filter from the optional catalog query params; null params are ignored.
     public static Specification<Course> withFilters(String search, Long categoryId, Boolean free,

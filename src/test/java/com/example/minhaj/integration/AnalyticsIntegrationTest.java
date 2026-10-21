@@ -30,10 +30,10 @@ class AnalyticsIntegrationTest extends IntegrationTestBase {
         Long design = createCategory(admin, "Design");
         createCategory(admin, "Empty");
 
-        courseA = createCourse(admin, "A", true, 0, programming);
-        courseB = createCourse(admin, "B", false, 20, programming);
-        courseC = createCourse(admin, "C", false, 30, design);
-        courseD = createCourse(admin, "D", true, 0, null);
+        courseA = createPublishedCourse(admin, "A", true, 0, programming);
+        courseB = createPublishedCourse(admin, "B", false, 20, programming);
+        courseC = createPublishedCourse(admin, "C", false, 30, design);
+        courseD = createPublishedCourse(admin, "D", true, 0, null);
 
         Long a1 = addLesson(admin, courseA, "A1");
         Long a2 = addLesson(admin, courseA, "A2");

@@ -16,7 +16,8 @@ class RequestResponseDtoIntegrationTest extends IntegrationTestBase {
 
     // Fields a client must not be able to set on a course
     private static final String SERVER_FIELDS = "\"id\":4242,\"averageRating\":4.9,\"reviewCount\":100,\"lessonCount\":50,"
-            + "\"createdAt\":\"2000-01-01T00:00:00\",\"instructor\":{\"id\":4242},\"instructorId\":4242";
+            + "\"createdAt\":\"2000-01-01T00:00:00\",\"instructor\":{\"id\":4242},\"instructorId\":4242,"
+            + "\"status\":\"PUBLISHED\",\"publishedAt\":\"2000-01-01T00:00:00\"";
 
     @Test
     void clientSuppliedServerFieldsAreIgnoredOnCourseCreate() throws Exception {
@@ -29,9 +30,11 @@ class RequestResponseDtoIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.averageRating").value(0.0))
                 .andExpect(jsonPath("$.reviewCount").value(0))
                 .andExpect(jsonPath("$.lessonCount").value(0))
-                .andExpect(jsonPath("$.instructorId").doesNotExist());
+                .andExpect(jsonPath("$.instructorId").doesNotExist())
+                .andExpect(jsonPath("$.status").value("DRAFT"))
+                .andExpect(jsonPath("$.publishedAt").doesNotExist());
 
-        mockMvc.perform(get("/api/courses/1"))
+        mockMvc.perform(auth(get("/api/courses/1"), admin))
                 .andExpect(jsonPath("$.title").value("Sneaky"))
                 .andExpect(jsonPath("$.averageRating").value(0.0))
                 .andExpect(jsonPath("$.reviewCount").value(0))
@@ -46,7 +49,7 @@ class RequestResponseDtoIntegrationTest extends IntegrationTestBase {
         String email = uniqueEmail("owner");
         String instructor = instructorToken(email);
         Long id = postForId("/api/instructor/courses", instructor, courseJson("Mine", false, 10, null));
-        Long other = createCourse(admin, "Someone else's", false, 5, null);
+        Long other = createPublishedCourse(admin, "Someone else's", false, 5, null);
         postForId("/api/instructor/courses/" + id + "/lessons", instructor, json("title", "L1"));
 
         mockMvc.perform(withJson(put("/api/instructor/courses/" + id), instructor,
@@ -64,8 +67,8 @@ class RequestResponseDtoIntegrationTest extends IntegrationTestBase {
     @Test
     void clientSuppliedIdsAreIgnoredOnLessonAndCategoryCreate() throws Exception {
         String admin = adminToken();
-        Long courseId = createCourse(admin, "Course", false, 1, null);
-        Long otherCourse = createCourse(admin, "Other", false, 1, null);
+        Long courseId = createPublishedCourse(admin, "Course", false, 1, null);
+        Long otherCourse = createPublishedCourse(admin, "Other", false, 1, null);
 
         mockMvc.perform(withJson(post("/api/admin/courses/" + courseId + "/lessons"), admin,
                         "{\"id\":99,\"title\":\"Intro\",\"course\":{\"id\":" + otherCourse + "}}"))
@@ -94,6 +97,7 @@ class RequestResponseDtoIntegrationTest extends IntegrationTestBase {
         Long categoryId = createCategory(admin, "Programming");
         Long courseId = postForId("/api/instructor/courses", instructor, courseJson("Taught", false, 10, categoryId));
         postForId("/api/instructor/courses/" + courseId + "/lessons", instructor, json("title", "L1"));
+        mockMvc.perform(auth(post("/api/instructor/courses/" + courseId + "/publish"), instructor)).andExpect(status().isOk());
         enroll(reviewer, courseId);
         Long reviewId = review(reviewer, courseId, 4, "nice");
 

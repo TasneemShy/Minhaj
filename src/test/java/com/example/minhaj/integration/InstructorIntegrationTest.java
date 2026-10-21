@@ -59,7 +59,7 @@ class InstructorIntegrationTest extends IntegrationTestBase {
         // instructor in the body is read-only: the server sets the owner
         Long id = postForId("/api/instructor/courses", instructor,
                 "{\"title\":\"Mine\",\"price\":10,\"instructor\":{\"id\":424242}}");
-        mockMvc.perform(get("/api/courses/" + id))
+        mockMvc.perform(auth(get("/api/courses/" + id), instructor))
                 .andExpect(jsonPath("$.instructorId").value(userId(email)));
 
         mockMvc.perform(withJson(put("/api/instructor/courses/" + id), instructor, courseJson("Mine v2", false, 12, null)))
@@ -74,6 +74,11 @@ class InstructorIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.content[*].title", contains("Mine v2")))
                 .andExpect(jsonPath("$.content[0].instructorId").value(userId(email)));
 
+        // the draft only reaches the public catalog once published
+        mockMvc.perform(get("/api/courses?instructorId=" + userId(email)))
+                .andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(auth(post("/api/instructor/courses/" + id + "/publish"), instructor))
+                .andExpect(status().isOk());
         mockMvc.perform(get("/api/courses?instructorId=" + userId(email)))
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
@@ -93,11 +98,11 @@ class InstructorIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isForbidden());
 
         // Admin-created courses have no owner, so instructors cannot touch them either
-        Long adminCourse = createCourse(adminToken(), "Admin's", false, 1, null);
+        Long adminCourse = createPublishedCourse(adminToken(), "Admin's", false, 1, null);
         mockMvc.perform(auth(delete("/api/instructor/courses/" + adminCourse), bob))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(get("/api/courses/" + alicesCourse)).andExpect(jsonPath("$.title").value("Alice's"));
+        mockMvc.perform(auth(get("/api/courses/" + alicesCourse), alice)).andExpect(jsonPath("$.title").value("Alice's"));
     }
 
     @Test
@@ -110,7 +115,7 @@ class InstructorIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isOk());
         mockMvc.perform(auth(delete("/api/instructor/courses/" + alicesCourse), admin))
                 .andExpect(status().isOk());
-        mockMvc.perform(get("/api/courses/" + alicesCourse)).andExpect(status().isNotFound());
+        mockMvc.perform(auth(get("/api/courses/" + alicesCourse), admin)).andExpect(status().isNotFound());
     }
 
     @Test
@@ -122,6 +127,8 @@ class InstructorIntegrationTest extends IntegrationTestBase {
         Long doomedLesson = postForId("/api/instructor/courses/" + doomed + "/lessons", instructor, json("title", "L1"));
         postForId("/api/instructor/courses/" + doomed + "/lessons", instructor, json("title", "L2"));
         Long survivorLesson = postForId("/api/instructor/courses/" + survivor + "/lessons", instructor, json("title", "S1"));
+        markPublished(doomed);
+        markPublished(survivor);
 
         String student = studentToken();
         for (Long course : new Long[]{doomed, survivor}) {
@@ -154,7 +161,7 @@ class InstructorIntegrationTest extends IntegrationTestBase {
     @Test
     void adminDeleteOfCourseWithDependentsAlsoSucceeds() throws Exception {
         String admin = adminToken();
-        Long id = createCourse(admin, "Busy", false, 10, null);
+        Long id = createPublishedCourse(admin, "Busy", false, 10, null);
         Long lesson = addLesson(admin, id, "L1");
         String student = studentToken();
         enroll(student, id);

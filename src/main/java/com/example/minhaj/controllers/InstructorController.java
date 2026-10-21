@@ -7,12 +7,14 @@ import com.example.minhaj.dtos.LessonOrderRequest;
 import com.example.minhaj.dtos.LessonRequest;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Course;
+import com.example.minhaj.models.CourseStatus;
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.CourseSpecifications;
 import com.example.minhaj.repositories.UserRepository;
 import com.example.minhaj.services.CourseService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -55,27 +57,19 @@ public class InstructorController {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found in the database."));
     }
 
-    private static boolean isAdmin(Authentication authentication) {
-        return authentication.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
-    }
-
     // Loads the course and checks that the current user owns it (or is an admin).
     private Course findOwnedCourse(Long id, Authentication authentication) {
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + id));
-        if (isAdmin(authentication)) {
-            return course;
-        }
-        User instructor = course.getInstructor();
-        if (instructor == null || !instructor.getId().equals(currentUser(authentication).getId())) {
+        if (!courseService.canManage(course, authentication)) {
             throw new AccessDeniedException("You can only manage your own courses.");
         }
         return course;
     }
 
     @Operation(summary = "List my courses",
-            description = "Instructors and admins. A page of the courses the caller teaches, newest first.")
+            description = "Instructors and admins. A page of the courses the caller teaches, drafts included, newest first.")
+    @Parameter(name = "status", description = "Only courses with this status; omit for all")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "A page of courses"),
             @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
@@ -85,16 +79,18 @@ public class InstructorController {
     public Page<CourseDTO> getMyCourses(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) CourseStatus status,
             Authentication authentication) {
         Long instructorId = currentUser(authentication).getId();
         return courseRepository.findAll(
-                CourseSpecifications.withFilters(null, null, null, null, null, null, instructorId),
+                CourseSpecifications.withFilters(null, null, null, null, null, null, instructorId)
+                        .and(CourseSpecifications.hasStatus(status)),
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
         ).map(CourseDTO::from);
     }
 
     @Operation(summary = "Create a course",
-            description = "Instructors and admins. The caller becomes the course's instructor.")
+            description = "Instructors and admins. The caller becomes the course's instructor. The course starts as a DRAFT.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The created course"),
             @ApiResponse(responseCode = "400", ref = BAD_REQUEST),
@@ -134,6 +130,35 @@ public class InstructorController {
     public ResponseEntity<?> deleteCourse(@PathVariable Long id, Authentication authentication) {
         courseService.deleteCourse(findOwnedCourse(id, authentication));
         return ResponseEntity.ok(Map.of("message", "Course deleted successfully!"));
+    }
+
+    @Operation(summary = "Publish my course",
+            description = "Owning instructor or admin. Makes the course PUBLISHED; 400 if it has no lessons. Publishing a "
+                    + "published course has no effect, and `publishedAt` keeps the first publish time.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The published course"),
+            @ApiResponse(responseCode = "400", ref = BAD_REQUEST),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN),
+            @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    })
+    @PostMapping("/courses/{id}/publish")
+    public CourseDTO publishCourse(@PathVariable Long id, Authentication authentication) {
+        return CourseDTO.from(courseService.publish(findOwnedCourse(id, authentication)));
+    }
+
+    @Operation(summary = "Unpublish my course",
+            description = "Owning instructor or admin. Moves the course back to DRAFT. Enrolled students keep their "
+                    + "enrollment and progress.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The course, now a draft"),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN),
+            @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    })
+    @PostMapping("/courses/{id}/unpublish")
+    public CourseDTO unpublishCourse(@PathVariable Long id, Authentication authentication) {
+        return CourseDTO.from(courseService.unpublish(findOwnedCourse(id, authentication)));
     }
 
     @Operation(summary = "Add a lesson to my course",

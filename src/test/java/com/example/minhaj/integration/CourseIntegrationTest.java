@@ -29,10 +29,10 @@ class CourseIntegrationTest extends IntegrationTestBase {
         programming = createCategory(admin, "Programming");
         design = createCategory(admin, "Design");
 
-        Long java = createCourse(admin, "Java Basics", true, 0, programming);
-        Long spring = createCourse(admin, "Spring Boot Mastery", false, 49.99, programming);
-        createCourse(admin, "Advanced Java", false, 120, programming);
-        createCourse(admin, "Figma for Beginners", false, 19, design);
+        Long java = createPublishedCourse(admin, "Java Basics", true, 0, programming);
+        Long spring = createPublishedCourse(admin, "Spring Boot Mastery", false, 49.99, programming);
+        createPublishedCourse(admin, "Advanced Java", false, 120, programming);
+        createPublishedCourse(admin, "Figma for Beginners", false, 19, design);
 
         // Ratings: Java Basics 5.0, Spring Boot Mastery 3.0
         review(studentToken(), java, 5, "great");
@@ -100,7 +100,7 @@ class CourseIntegrationTest extends IntegrationTestBase {
 
     @Test
     void getCourseByIdAnd404() throws Exception {
-        Long id = createCourse(admin, "Lonely", false, 5, null);
+        Long id = createPublishedCourse(admin, "Lonely", false, 5, null);
         mockMvc.perform(get("/api/courses/" + id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("Lonely"));
@@ -113,7 +113,8 @@ class CourseIntegrationTest extends IntegrationTestBase {
     void adminCrud() throws Exception {
         // Create: a free course always has price 0
         Long id = postForId("/api/admin/courses", admin, courseJson("New Course", true, 30, design));
-        mockMvc.perform(get("/api/courses/" + id))
+        // a new course is a draft, so only the admin can see it yet
+        mockMvc.perform(auth(get("/api/courses/" + id), admin))
                 .andExpect(jsonPath("$.price").value(0.0))
                 .andExpect(jsonPath("$.isFree").value(true))
                 .andExpect(jsonPath("$.categoryId").value(design))
@@ -130,7 +131,7 @@ class CourseIntegrationTest extends IntegrationTestBase {
 
         // Delete
         mockMvc.perform(auth(delete("/api/admin/courses/" + id), admin)).andExpect(status().isOk());
-        mockMvc.perform(get("/api/courses/" + id)).andExpect(status().isNotFound());
+        mockMvc.perform(auth(get("/api/courses/" + id), admin)).andExpect(status().isNotFound());
         mockMvc.perform(auth(delete("/api/admin/courses/" + id), admin)).andExpect(status().isNotFound());
     }
 
@@ -148,7 +149,7 @@ class CourseIntegrationTest extends IntegrationTestBase {
     @Test
     void studentsAreForbiddenOnAdminEndpoints() throws Exception {
         String student = studentToken();
-        Long courseId = createCourse(admin, "Protected", false, 1, null);
+        Long courseId = createPublishedCourse(admin, "Protected", false, 1, null);
 
         mockMvc.perform(withJson(post("/api/admin/courses"), student, courseJson("Hack", false, 1, null)))
                 .andExpect(status().isForbidden());
@@ -218,7 +219,7 @@ class CourseIntegrationTest extends IntegrationTestBase {
 
     @Test
     void lessonsAreListedPerCourseAndCountedOnTheCourse() throws Exception {
-        Long id = createCourse(admin, "With lessons", false, 10, null);
+        Long id = createPublishedCourse(admin, "With lessons", false, 10, null);
         addLesson(admin, id, "Intro");
         addLesson(admin, id, "Deep dive");
 
@@ -232,7 +233,7 @@ class CourseIntegrationTest extends IntegrationTestBase {
     @Test
     void enrollAndListMyCourses() throws Exception {
         String student = studentToken();
-        Long id = createCourse(admin, "Enrol me", false, 10, null);
+        Long id = createPublishedCourse(admin, "Enrol me", false, 10, null);
 
         mockMvc.perform(auth(get("/api/my-courses"), student))
                 .andExpect(status().isOk())

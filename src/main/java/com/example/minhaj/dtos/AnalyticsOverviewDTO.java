@@ -8,6 +8,8 @@ public record AnalyticsOverviewDTO(
         long totalCourses,
         long freeCourses,
         long paidCourses,
+        long publishedCourses,
+        long draftCourses,
         long totalCategories,
         long totalLessons,
         long totalEnrollments,
