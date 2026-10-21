@@ -10,6 +10,7 @@ import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.UserRepository;
 import com.example.minhaj.repositories.ReviewRepository;
+import com.example.minhaj.services.EmailVerificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -94,12 +95,14 @@ public class ReviewController {
     }
 
     @Operation(summary = "Review a course",
-            description = "Authenticated users. One review per user and course; a second review gives 400.",
+            description = "Authenticated users with a verified email (403 otherwise). One review per user and course; "
+                    + "a second review gives 400.",
             security = @SecurityRequirement(name = BEARER_AUTH))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The created review", content = @Content(schema = @Schema(implementation = ReviewDTO.class))),
             @ApiResponse(responseCode = "400", ref = BAD_REQUEST),
             @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN),
             @ApiResponse(responseCode = "404", ref = NOT_FOUND)
     })
     @PostMapping("/courses/{courseId}/reviews")
@@ -112,6 +115,7 @@ public class ReviewController {
         String userEmail = principal.getName();
         User student = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found in the database."));
+        EmailVerificationService.requireVerified(student, "post reviews");
 
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + courseId));

@@ -132,6 +132,6 @@ public class ProfileController {
     }
 
     private UserDTO toDTO(User user) {
-        return new UserDTO(user.getId(), user.getName(), user.getEmail(), user.getRole());
+        return new UserDTO(user.getId(), user.getName(), user.getEmail(), user.getRole(), user.isEmailVerified());
     }
 }

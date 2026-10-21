@@ -53,7 +53,8 @@ public abstract class IntegrationTestBase {
     @BeforeEach
     void cleanDatabase() {
         jdbc.execute("TRUNCATE users, categories, courses, lessons, reviews, student_courses, "
-                + "password_reset_token, lesson_progress, refresh_tokens RESTART IDENTITY CASCADE");
+                + "password_reset_token, lesson_progress, refresh_tokens, "
+                + "email_verification_tokens RESTART IDENTITY CASCADE");
         rateLimiter.reset();
     }
 
@@ -63,13 +64,25 @@ public abstract class IntegrationTestBase {
         return prefix + "-" + EMAIL_COUNTER.incrementAndGet() + "@test.com";
     }
 
+    // Registers through the API and marks the email as verified, like a user who clicked the emailed link,
+    // so enrolling and reviewing work. Use registerUnverified for the state right after registration.
     protected String register(String name, String email, String password) throws Exception {
+        String accessToken = registerUnverified(name, email, password);
+        markEmailVerified(email);
+        return accessToken;
+    }
+
+    protected String registerUnverified(String name, String email, String password) throws Exception {
         String body = mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json("name", name, "email", email, "password", password)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.accessToken");
+    }
+
+    protected void markEmailVerified(String email) {
+        jdbc.update("UPDATE users SET email_verified = TRUE WHERE email = ?", email);
     }
 
     protected String login(String email, String password) throws Exception {

@@ -7,5 +7,7 @@ public record UserDTO(
         String name,
         String email,
         @Schema(description = "Role", allowableValues = {"STUDENT", "INSTRUCTOR", "ADMIN"}, example = "STUDENT")
-        String role
+        String role,
+        @Schema(description = "Whether the user has confirmed their email address; needed to enroll and to post reviews")
+        boolean emailVerified
 ) {}

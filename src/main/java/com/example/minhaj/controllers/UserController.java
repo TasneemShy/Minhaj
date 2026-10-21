@@ -35,7 +35,7 @@ public class UserController {
     }
 
     private static UserDTO toDTO(User user) {
-        return new UserDTO(user.getId(), user.getName(), user.getEmail(), user.getRole());
+        return new UserDTO(user.getId(), user.getName(), user.getEmail(), user.getRole(), user.isEmailVerified());
     }
 
     @Operation(summary = "List users",
@@ -52,7 +52,7 @@ public class UserController {
                 .toList();
     }
 
-    // The user's current JWT still carries the old role; the new one applies after they log in again.
+    // The user's current access token still carries the old role; the new one applies from their next refresh or login.
     @Operation(summary = "Change a user's role",
             description = "Admin only. role must be STUDENT, INSTRUCTOR or ADMIN. The user's current JWT keeps the old role until they log in again.")
     @ApiResponses({

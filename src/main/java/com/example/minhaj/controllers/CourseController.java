@@ -8,6 +8,7 @@ import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.CourseSpecifications;
 import com.example.minhaj.repositories.UserRepository;
 import com.example.minhaj.services.CourseService;
+import com.example.minhaj.services.EmailVerificationService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -167,11 +168,13 @@ public class CourseController {
     }
 
     @Operation(summary = "Enroll in a course",
-            description = "Authenticated users. Enrolls the caller; enrolling again in the same course has no effect.",
+            description = "Authenticated users with a verified email (403 otherwise). Enrolls the caller; enrolling again "
+                    + "in the same course has no effect.",
             security = @SecurityRequirement(name = BEARER_AUTH))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Enrolled", content = @Content(schema = @Schema(ref = MESSAGE_SCHEMA))),
             @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN),
             @ApiResponse(responseCode = "404", ref = NOT_FOUND)
     })
     @PostMapping("/courses/{id}/enroll")
@@ -184,6 +187,7 @@ public class CourseController {
         String studentEmail = principal.getName();
         User student = userRepository.findByEmail(studentEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found in the database."));
+        EmailVerificationService.requireVerified(student, "enroll in courses");
 
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + id));

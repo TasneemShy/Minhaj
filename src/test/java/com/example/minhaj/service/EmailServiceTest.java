@@ -39,7 +39,7 @@ public class EmailServiceTest {
         String testEmail = "test@example.com";
         String testName = "Tasneem";
 
-        emailService.sendWelcomeEmail(testEmail, testName);
+        emailService.sendWelcomeEmail(testEmail, testName, "verify-123");
 
         ArgumentCaptor<SimpleMailMessage> messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender, times(1)).send(messageCaptor.capture());
@@ -49,6 +49,20 @@ public class EmailServiceTest {
         assertEquals("test@example.com", sentMessage.getTo()[0]);
         assertEquals("Welcome to Minhaj Platform! 🚀", sentMessage.getSubject());
         assertTrue(sentMessage.getText().contains(testName));
+        assertTrue(sentMessage.getText().contains("https://app.example.com/verify-email?token=verify-123\n"),
+                sentMessage.getText());
+    }
+
+    @Test
+    void testSendVerificationEmailLinksToFrontendAndEncodesToken() {
+        new EmailService(mailSender, "https://app.example.com/").sendVerificationEmail("test@example.com", "a+b/c=");
+
+        ArgumentCaptor<SimpleMailMessage> messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(messageCaptor.capture());
+
+        assertEquals("test@example.com", messageCaptor.getValue().getTo()[0]);
+        assertTrue(messageCaptor.getValue().getText().contains("https://app.example.com/verify-email?token=a%2Bb%2Fc%3D\n"),
+                messageCaptor.getValue().getText());
     }
 
     @Test
@@ -61,7 +75,7 @@ public class EmailServiceTest {
         appender.start();
         logger.addAppender(appender);
         try {
-            assertDoesNotThrow(() -> emailService.sendWelcomeEmail("test@example.com", "Tasneem"));
+            assertDoesNotThrow(() -> emailService.sendWelcomeEmail("test@example.com", "Tasneem", "token"));
         } finally {
             logger.detachAppender(appender);
         }

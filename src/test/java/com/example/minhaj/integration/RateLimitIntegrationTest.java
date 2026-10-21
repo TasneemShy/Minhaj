@@ -113,6 +113,17 @@ class RateLimitIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void resendVerificationIsLimitedPerIp() throws Exception {
+        for (int i = 0; i < 4; i++) {
+            mockMvc.perform(withJson(post("/api/auth/resend-verification"), null, json("email", uniqueEmail("rv"))))
+                    .andExpect(status().isOk());
+        }
+        mockMvc.perform(withJson(post("/api/auth/resend-verification"), null, json("email", uniqueEmail("rv"))))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"));
+    }
+
+    @Test
     void forwardedForHeaderIsIgnoredByDefault() throws Exception {
         // Rotating X-Forwarded-For must not give a fresh limit: the client IP is the socket address
         for (int i = 0; i < 4; i++) {
