@@ -10,6 +10,13 @@ import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.LessonProgressRepository;
 import com.example.minhaj.repositories.UserRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -19,8 +26,12 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.Map;
 
+import static com.example.minhaj.config.SwaggerConfig.*;
+
 @RestController
 @RequestMapping("/api/profile")
+@Tag(name = "Profile", description = "The caller's own account: profile, password and enrollments.")
+@SecurityRequirement(name = BEARER_AUTH)
 public class ProfileController {
 
     private final UserRepository userRepository;
@@ -36,12 +47,25 @@ public class ProfileController {
         this.passwordEncoder = new BCryptPasswordEncoder();
     }
 
+    @Operation(summary = "Get my profile",
+            description = "Authenticated users.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The caller's profile"),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED)
+    })
     @GetMapping
     public ResponseEntity<UserDTO> getProfile(Principal principal) {
         return ResponseEntity.ok(toDTO(findCurrentUser(principal)));
     }
 
     // Only the name can be changed here; email and role are deliberately not editable.
+    @Operation(summary = "Update my name",
+            description = "Authenticated users. Only the name can be changed; email and role are not editable here.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The updated profile"),
+            @ApiResponse(responseCode = "400", ref = BAD_REQUEST),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED)
+    })
     @PutMapping
     public ResponseEntity<UserDTO> updateProfile(@Valid @RequestBody UpdateProfileRequest request, Principal principal) {
         User user = findCurrentUser(principal);
@@ -49,6 +73,13 @@ public class ProfileController {
         return ResponseEntity.ok(toDTO(userRepository.save(user)));
     }
 
+    @Operation(summary = "Change my password",
+            description = "Authenticated users. 400 if the current password is wrong or the new one fails validation.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Password changed", content = @Content(schema = @Schema(ref = MESSAGE_SCHEMA))),
+            @ApiResponse(responseCode = "400", ref = BAD_REQUEST),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED)
+    })
     @PutMapping("/password")
     public ResponseEntity<?> changePassword(@Valid @RequestBody ChangePasswordRequest request, Principal principal) {
         User user = findCurrentUser(principal);
@@ -63,6 +94,14 @@ public class ProfileController {
         return ResponseEntity.ok(Map.of("message", "Password changed successfully."));
     }
 
+    @Operation(summary = "Unenroll from a course",
+            description = "Authenticated users. Also deletes the caller's progress in the course. 400 if not enrolled.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Unenrolled", content = @Content(schema = @Schema(ref = MESSAGE_SCHEMA))),
+            @ApiResponse(responseCode = "400", ref = BAD_REQUEST),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    })
     @DeleteMapping("/courses/{courseId}")
     @Transactional
     public ResponseEntity<?> unenroll(@PathVariable Long courseId, Principal principal) {

@@ -1,6 +1,7 @@
 package com.example.minhaj.dtos;
 
 import com.example.minhaj.models.Review;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 
@@ -10,6 +11,7 @@ public record ReviewDTO(
         Long courseId,
         Long authorId,
         String authorName,
+        @Schema(description = "Rating from 1 to 5", example = "5")
         int rating,
         String comment,
         LocalDateTime createdAt

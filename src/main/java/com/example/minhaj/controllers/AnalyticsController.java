@@ -10,6 +10,16 @@ import com.example.minhaj.models.Course;
 import com.example.minhaj.repositories.AnalyticsRepository;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.LessonRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -21,9 +31,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.example.minhaj.config.SwaggerConfig.*;
+
 @RestController
 @RequestMapping("/api/admin/analytics")
 @Transactional(readOnly = true)
+@Tag(name = "Admin – Analytics", description = "Platform statistics (ADMIN role). Ratings with no reviews are reported as 0.")
+@SecurityRequirement(name = BEARER_AUTH)
 public class AnalyticsController {
 
     private static final List<String> TOP_COURSE_ORDERS = List.of("enrollments", "rating", "reviews");
@@ -39,6 +53,13 @@ public class AnalyticsController {
         this.lessonRepository = lessonRepository;
     }
 
+    @Operation(summary = "Platform overview",
+            description = "Admin only. Totals for users (also per role), courses, categories, lessons, enrollments, reviews and completed lessons.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Overview"),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN)
+    })
     @GetMapping("/overview")
     public AnalyticsOverviewDTO getOverview() {
         Map<String, Long> usersByRole = new LinkedHashMap<>();
@@ -63,6 +84,18 @@ public class AnalyticsController {
         );
     }
 
+    @Operation(summary = "Top courses",
+            description = "Admin only. Courses ranked by enrollments, average rating or review count.")
+    @Parameter(name = "by", in = ParameterIn.QUERY, description = "Ranking metric",
+            schema = @Schema(type = "string", defaultValue = "enrollments", allowableValues = {"enrollments", "rating", "reviews"}))
+    @Parameter(name = "limit", in = ParameterIn.QUERY, description = "Number of courses, 1-50",
+            schema = @Schema(type = "integer", defaultValue = "5", minimum = "1", maximum = "50"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Top courses", content = @Content(array = @ArraySchema(schema = @Schema(implementation = TopCourseDTO.class)))),
+            @ApiResponse(responseCode = "400", ref = BAD_REQUEST),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN)
+    })
     @GetMapping("/top-courses")
     public ResponseEntity<?> getTopCourses(@RequestParam(defaultValue = "enrollments") String by,
                                            @RequestParam(defaultValue = "5") int limit) {
@@ -94,6 +127,13 @@ public class AnalyticsController {
         return ResponseEntity.ok(topCourses);
     }
 
+    @Operation(summary = "Per-category statistics",
+            description = "Admin only. One row per category plus a final Uncategorized row (categoryId null).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Category statistics"),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN)
+    })
     @GetMapping("/categories")
     public List<CategoryAnalyticsDTO> getCategoryStats() {
         List<CategoryAnalyticsDTO> stats = new ArrayList<>(analyticsRepository.findCategoryStats().stream()
@@ -115,6 +155,14 @@ public class AnalyticsController {
         return stats;
     }
 
+    @Operation(summary = "Course statistics",
+            description = "Admin only. Enrollments, lessons, reviews and the share of lessons completed by enrolled students.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Course statistics"),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "403", ref = FORBIDDEN),
+            @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    })
     @GetMapping("/courses/{id}")
     public CourseAnalyticsDTO getCourseStats(@PathVariable Long id) {
         Course course = courseRepository.findById(id)
