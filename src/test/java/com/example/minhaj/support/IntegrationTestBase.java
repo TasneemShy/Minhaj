@@ -129,8 +129,22 @@ public abstract class IntegrationTestBase {
         return postForId("/api/admin/categories", adminToken, json("name", name));
     }
 
+    // New courses are DRAFTs, hidden from the public catalog.
     protected Long createCourse(String adminToken, String title, boolean free, double price, Long categoryId) throws Exception {
         return postForId("/api/admin/courses", adminToken, courseJson(title, free, price, categoryId));
+    }
+
+    // Creates the course through the API, then marks it PUBLISHED in the database. Skips the publish endpoint
+    // (which needs a lesson) so tests that seed catalog data keep their lesson counts; the endpoint itself is
+    // covered by CourseLifecycleIntegrationTest.
+    protected Long createPublishedCourse(String adminToken, String title, boolean free, double price, Long categoryId) throws Exception {
+        Long id = createCourse(adminToken, title, free, price, categoryId);
+        markPublished(id);
+        return id;
+    }
+
+    protected void markPublished(Long courseId) {
+        jdbc.update("UPDATE courses SET status = 'PUBLISHED', published_at = now() WHERE id = ?", courseId);
     }
 
     protected Long addLesson(String token, Long courseId, String title) throws Exception {

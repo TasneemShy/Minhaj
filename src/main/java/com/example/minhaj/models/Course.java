@@ -98,4 +98,21 @@ public class Course {
 
     public User getInstructor() { return instructor; }
     public void setInstructor(User instructor) { this.instructor = instructor; }
+
+    // New courses start as drafts; see CourseService.publish/unpublish.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private CourseStatus status = CourseStatus.DRAFT;
+
+    // First time the course was published; kept on unpublish and re-publish. Null if never published.
+    @Column(name = "published_at")
+    private java.time.LocalDateTime publishedAt;
+
+    public CourseStatus getStatus() { return status; }
+    public void setStatus(CourseStatus status) { this.status = status; }
+
+    public boolean isPublished() { return status == CourseStatus.PUBLISHED; }
+
+    public java.time.LocalDateTime getPublishedAt() { return publishedAt; }
+    public void setPublishedAt(java.time.LocalDateTime publishedAt) { this.publishedAt = publishedAt; }
 }

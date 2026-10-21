@@ -54,7 +54,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "Platform overview",
-            description = "Admin only. Totals for users (also per role), courses, categories, lessons, enrollments, reviews and completed lessons.")
+            description = "Admin only. Totals for users (also per role), courses (free/paid, published/draft), categories, lessons, enrollments, reviews and completed lessons.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Overview"),
             @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
@@ -68,6 +68,7 @@ public class AnalyticsController {
 
         long totalCourses = analyticsRepository.countCourses();
         long freeCourses = analyticsRepository.countFreeCourses();
+        long publishedCourses = analyticsRepository.countPublishedCourses();
 
         return new AnalyticsOverviewDTO(
                 analyticsRepository.countUsers(),
@@ -75,6 +76,8 @@ public class AnalyticsController {
                 totalCourses,
                 freeCourses,
                 totalCourses - freeCourses,
+                publishedCourses,
+                totalCourses - publishedCourses,
                 analyticsRepository.countCategories(),
                 analyticsRepository.countLessons(),
                 analyticsRepository.countEnrollments(),

@@ -1,6 +1,7 @@
 package com.example.minhaj.dtos;
 
 import com.example.minhaj.models.Course;
+import com.example.minhaj.models.CourseStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -22,7 +23,11 @@ public record CourseDTO(
         Long instructorId,
         String instructorName,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        @Schema(description = "DRAFT courses are only visible to their instructor and admins")
+        CourseStatus status,
+        @Schema(description = "When the course was first published; null if it never was")
+        LocalDateTime publishedAt
 ) {
     public static CourseDTO from(Course course) {
         return new CourseDTO(
@@ -40,7 +45,9 @@ public record CourseDTO(
                 course.getInstructor() != null ? course.getInstructor().getId() : null,
                 course.getInstructor() != null ? course.getInstructor().getName() : null,
                 course.getCreatedAt(),
-                course.getUpdatedAt()
+                course.getUpdatedAt(),
+                course.getStatus(),
+                course.getPublishedAt()
         );
     }
 }

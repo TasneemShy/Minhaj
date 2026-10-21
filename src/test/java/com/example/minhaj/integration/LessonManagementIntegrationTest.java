@@ -25,7 +25,7 @@ class LessonManagementIntegrationTest extends IntegrationTestBase {
     @BeforeEach
     void seed() throws Exception {
         admin = adminToken();
-        courseId = createCourse(admin, "Java", false, 10, null);
+        courseId = createPublishedCourse(admin, "Java", false, 10, null);
         first = addLesson(admin, courseId, "One");
         second = addLesson(admin, courseId, "Two");
         third = addLesson(admin, courseId, "Three");
@@ -53,7 +53,7 @@ class LessonManagementIntegrationTest extends IntegrationTestBase {
 
     @Test
     void newLessonsGoToTheEndOfTheirCourse() throws Exception {
-        Long otherCourse = createCourse(admin, "Other", true, 0, null);
+        Long otherCourse = createPublishedCourse(admin, "Other", true, 0, null);
         Long otherLesson = addLesson(admin, otherCourse, "Elsewhere");
 
         mockMvc.perform(get("/api/courses/" + courseId + "/lessons"))
@@ -94,7 +94,7 @@ class LessonManagementIntegrationTest extends IntegrationTestBase {
 
     @Test
     void editValidatesBodyAndLessonOwnership() throws Exception {
-        Long otherCourse = createCourse(admin, "Other", true, 0, null);
+        Long otherCourse = createPublishedCourse(admin, "Other", true, 0, null);
 
         mockMvc.perform(withJson(put(lessonUrl("admin", courseId, first)), admin, json("title", " ")))
                 .andExpect(status().isBadRequest());
@@ -163,7 +163,7 @@ class LessonManagementIntegrationTest extends IntegrationTestBase {
 
     @Test
     void deleteReturns404ForLessonOutsideTheCourse() throws Exception {
-        Long otherCourse = createCourse(admin, "Other", true, 0, null);
+        Long otherCourse = createPublishedCourse(admin, "Other", true, 0, null);
 
         mockMvc.perform(auth(delete(lessonUrl("admin", otherCourse, first)), admin))
                 .andExpect(status().isNotFound());
@@ -188,7 +188,7 @@ class LessonManagementIntegrationTest extends IntegrationTestBase {
 
     @Test
     void reorderRejectsAnythingButEachLessonOnce() throws Exception {
-        Long otherCourse = createCourse(admin, "Other", true, 0, null);
+        Long otherCourse = createPublishedCourse(admin, "Other", true, 0, null);
         Long foreign = addLesson(admin, otherCourse, "Foreign");
 
         // missing id
@@ -234,10 +234,10 @@ class LessonManagementIntegrationTest extends IntegrationTestBase {
         mockMvc.perform(auth(delete(lessonUrl("instructor", mine, c)), instructor))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/courses/" + mine + "/lessons"))
+        mockMvc.perform(auth(get("/api/courses/" + mine + "/lessons"), instructor))
                 .andExpect(jsonPath("$[*].id", contains(ints(b, a))))
                 .andExpect(jsonPath("$[*].position", contains(1, 2)));
-        mockMvc.perform(get("/api/courses/" + mine)).andExpect(jsonPath("$.lessonCount").value(2));
+        mockMvc.perform(auth(get("/api/courses/" + mine), instructor)).andExpect(jsonPath("$.lessonCount").value(2));
 
         // a lesson id from someone else's course is still a 404 inside my own course
         mockMvc.perform(auth(delete(lessonUrl("instructor", mine, first)), instructor))
@@ -264,7 +264,7 @@ class LessonManagementIntegrationTest extends IntegrationTestBase {
         mockMvc.perform(auth(delete(lessonUrl("admin", theirs, lesson)), intruder))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(get("/api/courses/" + theirs + "/lessons"))
+        mockMvc.perform(auth(get("/api/courses/" + theirs + "/lessons"), owner))
                 .andExpect(jsonPath("$[0].title").value("Private"));
 
         // an admin may use the instructor endpoints on any course

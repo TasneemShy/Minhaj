@@ -6,6 +6,7 @@ import com.example.minhaj.exceptions.ApiException;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Category;
 import com.example.minhaj.models.Course;
+import com.example.minhaj.models.CourseStatus;
 import com.example.minhaj.models.Lesson;
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.CategoryRepository;
@@ -13,9 +14,12 @@ import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.LessonProgressRepository;
 import com.example.minhaj.repositories.LessonRepository;
 import com.example.minhaj.repositories.ReviewRepository;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -63,6 +67,63 @@ public class CourseService {
         course.setCategory(resolveCategory(request.categoryId()));
     }
 
+    private Course findCourse(Long id) {
+        return courseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + id));
+    }
+
+    // Admins may manage any course; anyone else only a course they teach. Null authentication = anonymous.
+    public boolean canManage(Course course, Authentication authentication) {
+        if (authentication == null) {
+            return false;
+        }
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        User instructor = course.getInstructor();
+        return isAdmin || (instructor != null && instructor.getEmail().equals(authentication.getName()));
+    }
+
+    // Published courses for everyone; drafts only for their instructor and admins. Everyone else gets
+    // the same 404 as for a missing course, so a draft's existence is not leaked.
+    public Course findVisibleCourse(Long id, Authentication authentication) {
+        Course course = findCourse(id);
+        if (!course.isPublished() && !canManage(course, authentication)) {
+            throw new ResourceNotFoundException("Course not found with ID: " + id);
+        }
+        return course;
+    }
+
+    // For student actions (enroll, review): only published courses, whoever asks.
+    public Course findPublishedCourse(Long id) {
+        Course course = findCourse(id);
+        if (!course.isPublished()) {
+            throw new ResourceNotFoundException("Course not found with ID: " + id);
+        }
+        return course;
+    }
+
+    // Idempotent. publishedAt keeps the first publish time, so re-publishing does not bump the course
+    // to the top of the "newest" catalog order.
+    public Course publish(Course course) {
+        if (lessonRepository.countByCourseId(course.getId()) == 0) {
+            throw ApiException.badRequest("Course " + course.getId()
+                    + " has no lessons. Add at least one lesson before publishing it.");
+        }
+        course.setStatus(CourseStatus.PUBLISHED);
+        if (course.getPublishedAt() == null) {
+            // Postgres timestamp(6) keeps microseconds; truncate so the response matches what is stored.
+            course.setPublishedAt(LocalDateTime.now().truncatedTo(ChronoUnit.MICROS));
+        }
+        return courseRepository.save(course);
+    }
+
+    // Idempotent. Enrolled students keep their enrollment and progress.
+    public Course unpublish(Course course) {
+        course.setStatus(CourseStatus.DRAFT);
+        return courseRepository.save(course);
+    }
+
+    // New courses start as DRAFT (the entity default) until they are published.
     public Course create(CourseRequest request, User instructor) {
         Course course = new Course();
         apply(course, request);

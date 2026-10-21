@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,16 +43,16 @@ public class LessonController {
     }
 
     // Lessons come back in course order (position 1..n).
-    @Operation(summary = "List a course's lessons", description = "Public. Lessons in course order (`position` 1..n).")
+    @Operation(summary = "List a course's lessons",
+            description = "Public for PUBLISHED courses. Lessons in course order (`position` 1..n). A DRAFT's lessons are "
+                    + "returned only to its instructor and admins; everyone else gets 404.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Lessons in order"),
             @ApiResponse(responseCode = "404", ref = NOT_FOUND)
     })
     @GetMapping("/courses/{courseId}/lessons")
-    public ResponseEntity<List<LessonDTO>> getLessonsByCourse(@PathVariable Long courseId) {
-        if (!courseRepository.existsById(courseId)) {
-            throw new ResourceNotFoundException("Cannot fetch lessons. Course not found with ID: " + courseId);
-        }
+    public ResponseEntity<List<LessonDTO>> getLessonsByCourse(@PathVariable Long courseId, Authentication authentication) {
+        courseService.findVisibleCourse(courseId, authentication);
         return ResponseEntity.ok(courseService.getLessons(courseId).stream().map(LessonDTO::from).toList());
     }
 

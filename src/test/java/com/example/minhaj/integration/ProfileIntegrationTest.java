@@ -67,8 +67,8 @@ class ProfileIntegrationTest extends IntegrationTestBase {
     @Test
     void unenrollRemovesEnrolmentAndThatCoursesProgressOnly() throws Exception {
         String admin = adminToken();
-        Long leaving = createCourse(admin, "Leaving", false, 1, null);
-        Long staying = createCourse(admin, "Staying", false, 1, null);
+        Long leaving = createPublishedCourse(admin, "Leaving", false, 1, null);
+        Long staying = createPublishedCourse(admin, "Staying", false, 1, null);
         Long leavingLesson = addLesson(admin, leaving, "L");
         Long stayingLesson = addLesson(admin, staying, "S");
 
@@ -97,7 +97,7 @@ class ProfileIntegrationTest extends IntegrationTestBase {
     @Test
     void unenrollFromCourseNotEnrolledOrMissing() throws Exception {
         String token = studentToken();
-        Long course = createCourse(adminToken(), "Never joined", false, 1, null);
+        Long course = createPublishedCourse(adminToken(), "Never joined", false, 1, null);
 
         mockMvc.perform(auth(delete("/api/profile/courses/" + course), token))
                 .andExpect(status().isBadRequest())

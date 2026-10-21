@@ -10,6 +10,7 @@ import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.UserRepository;
 import com.example.minhaj.repositories.ReviewRepository;
+import com.example.minhaj.services.CourseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -40,15 +41,19 @@ public class ReviewController {
     private final ReviewRepository reviewRepository;
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
+    private final CourseService courseService;
 
-    public ReviewController(ReviewRepository reviewRepository, CourseRepository courseRepository, UserRepository userRepository){
+    public ReviewController(ReviewRepository reviewRepository, CourseRepository courseRepository, UserRepository userRepository,
+                            CourseService courseService){
         this.reviewRepository = reviewRepository;
         this.courseRepository = courseRepository;
         this.userRepository = userRepository;
+        this.courseService = courseService;
     }
 
     @Operation(summary = "List a course's reviews",
-            description = "Public. A page of reviews, newest first. 400 if page < 0 or size < 1.")
+            description = "Public for PUBLISHED courses. A page of reviews, newest first. 400 if page < 0 or size < 1. "
+                    + "A DRAFT's reviews are returned only to its instructor and admins; everyone else gets 404.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "A page of reviews"),
             @ApiResponse(responseCode = "400", ref = BAD_REQUEST),
@@ -57,14 +62,12 @@ public class ReviewController {
     @GetMapping("/courses/{courseId}/reviews")
     public ResponseEntity<?> getReviewsByCourse(@PathVariable Long courseId,
                                                 @RequestParam(defaultValue = "0") int page,
-                                                @RequestParam(defaultValue = "10") int size){
+                                                @RequestParam(defaultValue = "10") int size,
+                                                Authentication authentication){
         if (page < 0 || size < 1) {
             throw ApiException.badRequest("page must be >= 0 and size must be >= 1.");
         }
-        if(!courseRepository.existsById(courseId)){
-
-            throw new ResourceNotFoundException("Course not found with ID: " + courseId);
-        }
+        courseService.findVisibleCourse(courseId, authentication);
         Pageable pageable = PageRequest.of(page, size, NEWEST_FIRST);
         return ResponseEntity.ok(reviewRepository.findByCourseId(courseId, pageable).map(ReviewDTO::from));
     }
@@ -94,7 +97,7 @@ public class ReviewController {
     }
 
     @Operation(summary = "Review a course",
-            description = "Authenticated users. One review per user and course; a second review gives 400.",
+            description = "Authenticated users. One review per user and course; a second review gives 400. 404 for a DRAFT course.",
             security = @SecurityRequirement(name = BEARER_AUTH))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The created review", content = @Content(schema = @Schema(implementation = ReviewDTO.class))),
@@ -113,8 +116,7 @@ public class ReviewController {
         User student = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found in the database."));
 
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + courseId));
+        Course course = courseService.findPublishedCourse(courseId);
 
         if (reviewRepository.existsByCourseIdAndUserId(courseId, student.getId())) {
             throw ApiException.badRequest("You have already reviewed this course.");
