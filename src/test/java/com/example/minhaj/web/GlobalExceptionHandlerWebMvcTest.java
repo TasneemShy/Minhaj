@@ -7,6 +7,7 @@ import com.example.minhaj.config.SecurityProblemHandler;
 import com.example.minhaj.controllers.CategoryController;
 import com.example.minhaj.repositories.CategoryRepository;
 import com.example.minhaj.repositories.CourseRepository;
+import com.example.minhaj.services.RateLimiter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -39,7 +40,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // Fast slice (no database): the error-response format produced by GlobalExceptionHandler, with the real
 // security chain and JWT filter in front of a controller whose repositories are mocked.
 @WebMvcTest(CategoryController.class)
-@Import({SecurityConfig.class, SecurityProblemHandler.class, JwtRequestFilter.class, JwtUtil.class, GlobalExceptionHandlerWebMvcTest.JwtFilterOnlyInSecurityChain.class})
+@Import({SecurityConfig.class, SecurityProblemHandler.class, JwtRequestFilter.class, JwtUtil.class, RateLimiter.class,
+        GlobalExceptionHandlerWebMvcTest.JwtFilterOnlyInSecurityChain.class})
 @ActiveProfiles("test")
 class GlobalExceptionHandlerWebMvcTest {
 

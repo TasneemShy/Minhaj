@@ -1,5 +1,7 @@
 package com.example.minhaj.config;
 
+import com.example.minhaj.services.RateLimiter;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,6 +13,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.servlet.HandlerExceptionResolver;
 import java.util.List;
 
 @Configuration
@@ -19,13 +22,17 @@ public class SecurityConfig {
 
     private final JwtRequestFilter jwtRequestFilter;
     private final SecurityProblemHandler securityProblemHandler;
+    private final RateLimitFilter rateLimitFilter;
 
     private final List<String> allowedOrigins;
 
     public SecurityConfig(JwtRequestFilter jwtRequestFilter, SecurityProblemHandler securityProblemHandler,
+                          RateLimiter rateLimiter,
+                          @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver,
                           @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         this.jwtRequestFilter = jwtRequestFilter;
         this.securityProblemHandler = securityProblemHandler;
+        this.rateLimitFilter = new RateLimitFilter(rateLimiter, resolver);
         this.allowedOrigins = allowedOrigins.stream()
                 .map(String::trim)
                 .filter(origin -> !origin.isEmpty())
@@ -60,7 +67,9 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(securityProblemHandler).accessDeniedHandler(securityProblemHandler))
-                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class)
+                // After CORS (so a 429 still carries CORS headers), before any authentication work
+                .addFilterBefore(rateLimitFilter, JwtRequestFilter.class);
         return http.build();
     }
 

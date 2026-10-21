@@ -31,6 +31,10 @@ public class User {
 
     private String role;
 
+    // False until the user follows the emailed verification link (see EmailVerificationService).
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "student_courses",
@@ -55,6 +59,9 @@ public class User {
 
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+
+    public boolean isEmailVerified() { return emailVerified; }
+    public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
 
     public java.util.Set<Course> getEnrolledCourses() { return enrolledCourses; }
     public void setEnrolledCourses(java.util.Set<Course> enrolledCourses) { this.enrolledCourses = enrolledCourses; }

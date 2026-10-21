@@ -41,8 +41,9 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 
 ### 1. Authentication & Security
 
-* User registration with BCrypt password hashing and a welcome email.
-* Login that issues a signed JWT (valid for 24 hours); tokens stay valid across restarts because the signing key comes from configuration.
+* User registration with BCrypt password hashing and a welcome email that carries an email verification link. Unverified users can log in but cannot enroll or post reviews until they confirm their address.
+* Login that issues a short-lived access token (signed JWT, 15 minutes by default) and a long-lived refresh token (14 days). Refresh tokens are single-use and rotated on every refresh, stored only as SHA-256 hashes, and revoked on logout and on password change or reset; reusing an old one signs the user out everywhere. Tokens stay valid across restarts because the signing key comes from configuration.
+* Rate limiting on login, registration and password reset (429 with `Retry-After`).
 * Forgot-password flow: emails a one-time reset link valid for 15 minutes. Only a SHA-256 hash of the token is stored in the database.
 * Role-based access control with three roles: students (`STUDENT`, the default on registration), instructors (`INSTRUCTOR`), and administrators (`ADMIN`). Administrators assign roles.
 * User profile: view your account, update your name, change your password (current password required), and unenroll from courses (which also clears your progress in them).
@@ -101,7 +102,7 @@ Both are public. Endpoints are grouped by tag (Auth, Courses, Categories, Lesson
 > **Testing protected routes in Swagger:**
 > 1. Call `POST /api/auth/login` (or `/api/auth/register`) to get a token.
 > 2. Click the **Authorize** button at the top of the Swagger page.
-> 3. Paste the JWT token (without the `Bearer ` prefix) into the `Value` field and submit.
+> 3. Paste the `accessToken` value (without the `Bearer ` prefix) into the `Value` field and submit.
 >
 > Operations that need a token show a lock icon; public ones don't. The token's role still decides access, so admin endpoints answer 403 for a student token.
 
@@ -115,12 +116,50 @@ A Postman collection is also included in the `postman/` folder.
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `POST` | `/api/auth/register` | Register a new account and get a JWT | Public |
-| `POST` | `/api/auth/login` | Log in and get a JWT | Public |
+| `POST` | `/api/auth/register` | Register a new account and get a token pair | Public |
+| `POST` | `/api/auth/login` | Log in and get a token pair | Public |
+| `POST` | `/api/auth/refresh` | Exchange a refresh token for a new token pair (body: `{"refreshToken"}`) | Public |
+| `POST` | `/api/auth/logout` | Revoke a refresh token; answers `204` (body: `{"refreshToken"}`) | Public |
+| `POST` | `/api/auth/verify-email` | Confirm the email address (body: `{"token"}` from the emailed link) | Public |
+| `POST` | `/api/auth/resend-verification` | Email a new verification link (body: `{"email"}`) | Public |
 | `POST` | `/api/auth/forgot-password` | Email a password reset token (body: `{"email"}`) | Public |
 | `POST` | `/api/auth/reset-password` | Set a new password (body: `{"token", "newPassword"}`) | Public |
 
+**Tokens:** login, register and refresh answer
+
+```json
+{
+  "message": "Login successful",
+  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "refreshToken": "q3J0dX4m1YvR8c2l0nP6sT9wZbE5aHkLxGfUoNiCjDy",
+  "expiresIn": 900,
+  "role": "STUDENT",
+  "token": "eyJhbGciOiJIUzI1NiJ9..."
+}
+```
+
+* `accessToken` goes in the `Authorization: Bearer ...` header. It lives `app.jwt.access-ttl` (default `15m`, env `JWT_ACCESS_TTL`); `expiresIn` is that lifetime in seconds.
+* `refreshToken` lives `app.jwt.refresh-ttl` (default `14d`, env `JWT_REFRESH_TTL`). Send it to `POST /api/auth/refresh` before or after the access token expires to get a new pair. Each refresh token works once: the response carries its replacement. Presenting a refresh token that was already used (or revoked) is treated as theft: all of that user's refresh tokens are revoked and the call answers `401`, so every device has to log in again.
+* `POST /api/auth/logout` revokes the refresh token it is given. Changing the password (`PUT /api/profile/password`) or resetting it revokes all of the user's refresh tokens.
+* Access tokens are stateless and are **not** revoked by logout or a password change: one already issued keeps working until it expires (at most `access-ttl`). Clients should discard it on logout. That is the trade-off for not looking up every request in the database; keep `access-ttl` short.
+* **Deprecated:** `token` is the same value as `accessToken` and is only kept so existing clients keep working. It will be removed in the release after next; switch to `accessToken`.
+
+**Email verification:** new accounts start unverified. Registration still returns tokens, and the welcome email links to `<FRONTEND_URL>/verify-email?token=<token>`; the frontend sends that token to `POST /api/auth/verify-email`. The link is valid for 24 hours and works once; only a SHA-256 hash of the token is stored. `POST /api/auth/resend-verification` sends a new link (replacing the old one) and always gives the same answer, whether or not the email is registered or already verified. Completing a password reset also marks the email as verified, since the reset link proves the same thing.
+
+Until the email is verified, exactly two actions answer `403` (Problem Details): enrolling in a course (`POST /api/courses/{id}/enroll`) and posting a review (`POST /api/courses/{courseId}/reviews`). Everything else (browsing, profile, password change, progress in courses already joined) works. `GET /api/profile` and the admin user list include `emailVerified`. Accounts that existed before verification was introduced were marked verified by the `V4` migration.
+
 **Password reset flow:** `forgot-password` always gives the same answer, whether or not the email is registered. For a registered email it sends a link to `<FRONTEND_URL>/reset-password?token=<token>` (`FRONTEND_URL` defaults to `http://localhost:5173`). The backend does not serve that page: the frontend reads `token` from the URL, asks for the new password and sends `POST /api/auth/reset-password` with `{"token", "newPassword"}`. The token is valid for 15 minutes and can be used once; asking again replaces the previous token.
+
+**Rate limits:** the public auth endpoints are rate limited per client, in memory (token buckets per app instance):
+
+| Endpoint | Default limit (`application.properties`) |
+| --- | --- |
+| `POST /api/auth/login` | 5 per minute per email + client IP (`app.rate-limit.login-per-email`), and 20 per minute per client IP across all emails (`app.rate-limit.login-per-ip`) |
+| `POST /api/auth/register`, `/forgot-password`, `/reset-password`, `/resend-verification` | 10 per minute per client IP, counted separately for each endpoint (`app.rate-limit.per-ip`) |
+
+Over the limit the API answers `429 Too Many Requests` (Problem Details) with a `Retry-After` header in seconds. The window is `app.rate-limit.window` (default `1m`); `app.rate-limit.enabled=false` turns limiting off. The per-email login limit is also per IP, so someone guessing a password cannot lock the real owner out from another network.
+
+The client IP is the TCP peer address (`request.getRemoteAddr()`). `X-Forwarded-For` is ignored by default because any client can send it and would get a fresh limit with every request. If the API runs behind exactly one reverse proxy that sets that header, set `app.rate-limit.trust-forwarded-for=true` (the right-most address is used) or `server.forward-headers-strategy=native`. Limits are per instance: with several replicas each one counts on its own.
 
 ### Course Catalog & Learning
 
@@ -129,7 +168,7 @@ A Postman collection is also included in the `postman/` folder.
 | `GET` | `/api/courses` | List published courses (filters and sorting below) | Public |
 | `GET` | `/api/courses/{id}` | Get a course's details (drafts: owner and admins only) | Public |
 | `GET` | `/api/courses/{courseId}/lessons` | List a course's lessons, ordered by `position` (drafts: owner and admins only) | Public |
-| `POST` | `/api/courses/{id}/enroll` | Enroll the current user in a published course | Authenticated |
+| `POST` | `/api/courses/{id}/enroll` | Enroll the current user in a published course | Authenticated, verified email |
 | `GET` | `/api/my-courses` | List the current user's enrolled courses, with each course's `status` (an empty list when there are none) | Authenticated |
 | `GET` | `/api/categories` | List all categories | Public |
 
@@ -151,7 +190,7 @@ A Postman collection is also included in the `postman/` folder.
 
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `GET` | `/api/profile` | Get the current user (`id`, `name`, `email`, `role`) | Authenticated |
+| `GET` | `/api/profile` | Get the current user (`id`, `name`, `email`, `role`, `emailVerified`) | Authenticated |
 | `PUT` | `/api/profile` | Update your name (body: `{"name"}`); email and role can't be changed here | Authenticated |
 | `PUT` | `/api/profile/password` | Change your password (body: `{"currentPassword", "newPassword"}`, new password at least 6 characters) | Authenticated |
 | `DELETE` | `/api/profile/courses/{courseId}` | Unenroll from a course and delete your progress in it | Authenticated |
@@ -170,7 +209,7 @@ A Postman collection is also included in the `postman/` folder.
 | HTTP Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
 | `GET` | `/api/courses/{courseId}/reviews` | List a course's reviews, newest first (`?page=0&size=10`; drafts: owner and admins only) | Public |
-| `POST` | `/api/courses/{courseId}/reviews` | Review a published course (body: `{"comment", "rating"}`) | Authenticated |
+| `POST` | `/api/courses/{courseId}/reviews` | Review a published course (body: `{"comment", "rating"}`) | Authenticated, verified email |
 | `PUT` | `/api/courses/{courseId}/reviews/{reviewId}` | Edit your review (body: `{"comment", "rating"}`) | Review author |
 | `DELETE` | `/api/courses/{courseId}/reviews/{reviewId}` | Delete a review | Review author or Admin |
 | `GET` | `/api/users/{userId}/reviews` | List a user's reviews, newest first (`?page=0&size=10`) | Authenticated |
@@ -258,7 +297,7 @@ Every course has a `status` of `DRAFT` or `PUBLISHED`, returned in `CourseDTO` t
 
 > **Breaking change:** the category used to be sent nested as `"category": {"id": 1}`. It is now a flat `categoryId`; the old nested form is ignored (the course ends up uncategorized). Server-owned fields (`id`, `averageRating`, `reviewCount`, `lessonCount`, `createdAt`, `updatedAt`, `instructor`) are ignored if sent. Course responses always use the `CourseDTO` shape: `categoryId`/`categoryName` and `instructorId`/`instructorName` instead of nested objects, and `isFree` instead of `free`.
 
-> **Note:** the role is stored in the JWT, so a user whose role was changed keeps their old permissions until they log in again and get a new token.
+> **Note:** the role is stored in the JWT, so a user whose role was changed keeps their old permissions until they get a new access token (by refreshing or logging in again), at most `app.jwt.access-ttl` later.
 
 ### Analytics (`/api/admin/analytics`)
 
@@ -326,11 +365,15 @@ MAIL_PASSWORD=your-mailtrap-password
 JWT_SECRET=your-base64-jwt-secret
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 FRONTEND_URL=http://localhost:5173
+JWT_ACCESS_TTL=15m
+JWT_REFRESH_TTL=14d
 ```
 
 `CORS_ALLOWED_ORIGINS` is a comma-separated list of the exact browser origins allowed to call the API (optional; defaults to the local React/Vite dev servers shown above). Set it to your frontend's URL in production, e.g. `https://app.example.com`. A `*` wildcard is rejected and the app refuses to start.
 
-`FRONTEND_URL` is the base URL of the frontend (optional; defaults to `http://localhost:5173`). Password reset emails link to `<FRONTEND_URL>/reset-password?token=...`, so the frontend must serve that page.
+`FRONTEND_URL` is the base URL of the frontend (optional; defaults to `http://localhost:5173`). Password reset emails link to `<FRONTEND_URL>/reset-password?token=...` and verification emails to `<FRONTEND_URL>/verify-email?token=...`, so the frontend must serve both pages.
+
+`JWT_ACCESS_TTL` and `JWT_REFRESH_TTL` set the access and refresh token lifetimes (optional; `15m` and `14d` by default, any Spring duration such as `30m`, `12h`, `7d`).
 
 Generate a JWT secret (a base64-encoded 256-bit key) with:
 

@@ -20,7 +20,7 @@ public class EmailService {
     private final JavaMailSender mailSender;
     private final String frontendUrl;
 
-    // frontendUrl: base URL of the web app that serves the /reset-password page (app.frontend-url).
+    // frontendUrl: base URL of the web app that serves the /reset-password and /verify-email pages (app.frontend-url).
     public EmailService(JavaMailSender mailSender, @Value("${app.frontend-url}") String frontendUrl) {
         this.mailSender = mailSender;
         this.frontendUrl = frontendUrl.endsWith("/")
@@ -28,8 +28,9 @@ public class EmailService {
                 : frontendUrl;
     }
 
+    // Sent on registration; carries the first email verification link.
     @Async
-    public void sendWelcomeEmail(String toEmail, String studentName) {
+    public void sendWelcomeEmail(String toEmail, String studentName, String verificationToken) {
         SimpleMailMessage message = new SimpleMailMessage();
 
         message.setFrom("noreply@minhaj.com");
@@ -37,8 +38,27 @@ public class EmailService {
         message.setSubject("Welcome to Minhaj Platform! 🚀");
         message.setText("Hello " + studentName + ",\n\n" +
                 "We are thrilled to have you join our platform. We wish you an enjoyable learning journey!\n\n" +
+                "Please confirm your email address before enrolling in courses (the link is valid for 24 hours):\n" +
+                verifyUrl(verificationToken) + "\n\n" +
                 "The Minhaj Team.");
         send(message, "welcome");
+    }
+
+    @Async
+    public void sendVerificationEmail(String toEmail, String verificationToken) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom("noreply@minhaj.com");
+        message.setTo(toEmail);
+        message.setSubject("Confirm your email - Minhaj Platform ✉️");
+        message.setText("Please use the following link to confirm your email address (valid for 24 hours):\n" +
+                verifyUrl(verificationToken) + "\n\n" +
+                "If you did not create a Minhaj account, please ignore this email.");
+        send(message, "verification");
+    }
+
+    // The frontend page reads the token from the URL and POSTs it to /api/auth/verify-email.
+    private String verifyUrl(String token) {
+        return frontendUrl + "/verify-email?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
     }
 
     @Async
