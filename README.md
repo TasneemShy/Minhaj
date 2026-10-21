@@ -29,7 +29,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 * **DTO Pattern with Java Records:** JPA entities never cross the API boundary. Request bodies bind to `record` types with Bean Validation (`CourseRequest`, `LessonRequest`, `ReviewRequest`, `CategoryRequest`, …), so clients cannot set server-owned fields such as `id`, `averageRating`, `reviewCount`, `lessonCount`, `createdAt` or `instructor`. Responses are `record` DTOs (`CourseDTO`, `LessonDTO`, `ReviewDTO`, `CategoryDTO`, `UserDTO`) built with small static `from(...)` factories; reviews name their author by `authorId` and `authorName` only.
 * **Centralized Exception Handling:** `@RestControllerAdvice` (`GlobalExceptionHandler`) and Spring Security's entry point / access-denied handler return every error as RFC 9457 Problem Details (see [Error format](#error-format)).
 * **JPA Auditing:** Automatic `createdAt` / `updatedAt` timestamps (`@CreatedDate`, `@LastModifiedDate`).
-* **Pagination, Filtering & Sorting:** Course listing combines Spring Data's `Pageable` with JPA `Specification`s (`CourseSpecifications`) so any mix of search, category, price, and rating filters becomes a single query.
+* **Pagination, Filtering & Sorting:** Course listing combines Spring Data's `Pageable` with JPA `Specification`s (`CourseSpecifications`) so any mix of search, category, price, and rating filters becomes a single query. Search is Postgres full-text search on a generated, GIN-indexed `tsvector` column (`V5__course_search.sql`), called from the Criteria query through Hibernate pattern functions (`CourseSearchFunctions`) with the user's text always bound as a parameter.
 * **Entity Relationships:** Category → Courses (one-to-many), Course → Lessons (one-to-many), Students ↔ Courses (many-to-many enrollment), Course → Reviews and User → Reviews (one-to-many), and per-student lesson completion records (`LessonProgress`).
 * **CORS:** Origin allow-list (`CORS_ALLOWED_ORIGINS`) configured in `SecurityConfig`; wildcards are rejected.
 * **Stateless JWT Security:** A request filter validates Bearer tokens and applies role-based route rules.
@@ -53,7 +53,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 
 * Full CRUD for administrators to create, update, and delete courses.
 * Free and paid courses (free courses always have a price of `0`).
-* Paginated catalog browsing with case-insensitive search, filters (category, free/paid, price range, minimum rating), and sorting.
+* Paginated catalog browsing with full-text search over titles and descriptions (Arabic and English, phrases, `or`, exclusions, prefix matching, relevance ranking), filters (category, free/paid, price range, minimum rating), and sorting.
 * Courses can be grouped into categories that administrators manage.
 * Instructors create and manage their own courses and lessons; a course shows its instructor's ID and name (never their email).
 * Draft/published lifecycle: new courses are private drafts until their instructor (or an admin) publishes them (see [Course lifecycle](#course-lifecycle-draft--published)).
@@ -70,6 +70,7 @@ Minhaj is a backend REST API for an online learning platform. It covers stateles
 
 * Enrolled students can mark lessons as complete (or undo it).
 * Progress is reported per course as completed/total lessons and a percentage, plus an overview across all enrolled courses.
+* Course completion: a course counts as completed once it has at least one lesson and the student has completed every current lesson. See [Course completion](#course-completion).
 
 ### 5. Reviews & Ratings
 
@@ -178,14 +179,29 @@ The client IP is the TCP peer address (`request.getRemoteAddr()`). `X-Forwarded-
 | Parameter | Example | Description |
 | --- | --- | --- |
 | `page`, `size` | `page=0&size=10` | Pagination (defaults `0` and `10`) |
-| `search` | `search=spring` | Case-insensitive title search |
+| `search` | `search=spring boot` | Full-text search in the title and description; see [Search syntax](#search-syntax). At most 200 characters (`400` otherwise) |
 | `categoryId` | `categoryId=2` | Only courses in this category |
 | `free` | `free=true` | Only free (`true`) or paid (`false`) courses |
 | `minPrice`, `maxPrice` | `minPrice=10&maxPrice=50` | Price range (inclusive) |
 | `minRating` | `minRating=4` | Minimum average rating |
 | `instructorId` | `instructorId=3` | Only courses taught by this instructor |
-| `sortBy` | `sortBy=price` | `createdAt` (default), `title`, `price`, `averageRating`, or `reviewCount` |
+| `sortBy` | `sortBy=price` | `relevance` (default when `search` is given), `createdAt` (default otherwise), `title`, `price`, `averageRating`, or `reviewCount` |
 | `direction` | `direction=asc` | `asc` or `desc` (default) |
+
+#### Search syntax
+
+`search` matches whole words in a course's title and description, case-insensitively. It works the same for Arabic and English: words are not stemmed, so `lesson` does not find `lessons` by itself (prefix matching usually covers that).
+
+| Query | Matches courses that contain |
+| --- | --- |
+| `spring boot` | both words, anywhere in the title or description |
+| `spri`, `spring bo` | words starting with these letters (only for plain words: letters, digits and spaces) |
+| `"spring boot"` | the exact phrase |
+| `java or kotlin` | either word |
+| `spring -security` | `spring` but not `security` |
+| `البرمجة` | the Arabic word |
+
+Punctuation and operators the syntax can't use are ignored, so any input returns `200` (an empty page when nothing matches). With `search`, results are sorted by relevance unless `sortBy` says otherwise: a match in the title ranks above a match only in the description, and ties go to the newest course. `sortBy=relevance` without `search` sorts by `createdAt`. Drafts are never returned.
 
 ### Profile (`/api/profile`)
 
@@ -204,6 +220,20 @@ The client IP is the TCP peer address (`request.getRemoteAddr()`). `X-Forwarded-
 | `DELETE` | `/api/courses/{courseId}/lessons/{lessonId}/complete` | Mark a lesson not complete | Enrolled students |
 | `GET` | `/api/courses/{courseId}/progress` | Progress in one course | Enrolled students |
 | `GET` | `/api/my-courses/progress` | Progress across all enrolled courses | Authenticated |
+| `GET` | `/api/courses/{courseId}/completion` | Completion "certificate" for a completed course: `courseId`, `courseTitle`, `studentName`, `completedAt`, `lessonCount`, `instructorName` (404 if not enrolled or not completed) | Enrolled students |
+| `GET` | `/api/my-courses/completed` | The same completion details for every enrolled course the caller has completed (empty list when none) | Authenticated |
+
+#### Course completion
+
+Completion is derived from lesson progress on every request; nothing extra is stored.
+
+* A course is **completed** for a student when they are enrolled, the course has at least one lesson, and every current lesson is marked complete. `completedAt` is the time the latest of those lessons was completed.
+* The progress responses (`POST`/`DELETE .../complete`, `GET /api/courses/{courseId}/progress`, `GET /api/my-courses/progress`) include `completed` (boolean) and `completedAt` (null while incomplete).
+* Because completion follows the course's current lessons, adding a lesson makes the course incomplete again for everyone until they complete the new lesson; deleting the only lesson a student was missing completes the course for them. Undoing a lesson (`DELETE .../complete`) also makes it incomplete.
+* Courses with no lessons are never completed.
+* `GET /api/my-courses` is unchanged; use `GET /api/my-courses/completed` (or `completed` in `GET /api/my-courses/progress`) to tell which enrolled courses are finished.
+* When marking a lesson complete finishes the course, the student gets a best-effort congratulations email (sent asynchronously, failures are only logged) linking to `<FRONTEND_URL>/courses/{courseId}/certificate`; the frontend can render that page from `GET /api/courses/{courseId}/completion`. Repeating a completion call sends nothing. Since completion is not stored, a student who undoes a lesson (or gets a new lesson added) and then completes the course again receives another email.
+* Like the other progress endpoints, completion does not require a verified email; enrolling already does.
 
 ### Reviews
 
@@ -307,7 +337,7 @@ Every course has a `status` of `DRAFT` or `PUBLISHED`, returned in `CourseDTO` t
 | `GET` | `/api/admin/analytics/overview` | Platform totals: users (and per role), courses (free/paid, published/draft), categories, lessons, enrollments, reviews, average rating, completed lessons | Admin |
 | `GET` | `/api/admin/analytics/top-courses` | Top courses; `by=enrollments` (default), `rating` or `reviews`, `limit=1..50` (default `5`) | Admin |
 | `GET` | `/api/admin/analytics/categories` | Course count, enrollments and average rating per category, plus an `Uncategorized` row | Admin |
-| `GET` | `/api/admin/analytics/courses/{id}` | One course's enrollments, lessons, reviews, average rating and average completion % | Admin |
+| `GET` | `/api/admin/analytics/courses/{id}` | One course's enrollments, lessons, reviews, average rating, average completion %, `completions` (enrolled students who completed every lesson) and `completionRate` (`completions` as a % of enrollments, one decimal) | Admin |
 
 ### System
 

@@ -79,6 +79,21 @@ public class EmailService {
         send(message, "password reset");
     }
 
+    // Sent when a lesson completion completes a course (see ProgressController.completeLesson).
+    @Async
+    public void sendCourseCompletedEmail(String toEmail, String studentName, Long courseId, String courseTitle) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom("noreply@minhaj.com");
+        message.setTo(toEmail);
+        message.setSubject("Congratulations on completing " + courseTitle + "! 🎓");
+        message.setText("Hello " + studentName + ",\n\n" +
+                "You have completed every lesson of \"" + courseTitle + "\". Well done!\n\n" +
+                "Your certificate of completion is ready:\n" +
+                frontendUrl + "/courses/" + courseId + "/certificate\n\n" +
+                "The Minhaj Team.");
+        send(message, "course completion");
+    }
+
     private void send(SimpleMailMessage message, String kind) {
         try {
             mailSender.send(message);
