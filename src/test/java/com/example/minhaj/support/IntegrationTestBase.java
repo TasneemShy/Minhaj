@@ -2,6 +2,7 @@ package com.example.minhaj.support;
 
 import com.example.minhaj.models.User;
 import com.example.minhaj.repositories.UserRepository;
+import com.example.minhaj.services.RateLimiter;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,9 @@ public abstract class IntegrationTestBase {
     @Autowired
     protected UserRepository userRepository;
 
+    @Autowired
+    protected RateLimiter rateLimiter;
+
     // No real SMTP in tests
     @MockitoBean
     protected JavaMailSender mailSender;
@@ -50,6 +54,7 @@ public abstract class IntegrationTestBase {
     void cleanDatabase() {
         jdbc.execute("TRUNCATE users, categories, courses, lessons, reviews, student_courses, "
                 + "password_reset_token, lesson_progress RESTART IDENTITY CASCADE");
+        rateLimiter.reset();
     }
 
     // ---- users & tokens ----

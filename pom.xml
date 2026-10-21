@@ -86,6 +86,17 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Rate limiting on the auth endpoints: in-memory token buckets kept in a bounded Caffeine cache -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>8.21.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- validation -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

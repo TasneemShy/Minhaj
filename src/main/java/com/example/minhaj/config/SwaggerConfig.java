@@ -3,8 +3,10 @@ package com.example.minhaj.config;
 import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.headers.Header;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.IntegerSchema;
 import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
@@ -31,6 +33,7 @@ public class SwaggerConfig {
     public static final String FORBIDDEN = "#/components/responses/Forbidden";
     public static final String NOT_FOUND = "#/components/responses/NotFound";
     public static final String CONFLICT = "#/components/responses/Conflict";
+    public static final String TOO_MANY_REQUESTS = "#/components/responses/TooManyRequests";
 
     public static final String MESSAGE_SCHEMA = "#/components/schemas/Message";
     public static final String AUTH_RESPONSE_SCHEMA = "#/components/schemas/AuthResponse";
@@ -76,7 +79,12 @@ public class SwaggerConfig {
                         .addResponses("Unauthorized", problem("Missing, invalid or expired JWT."))
                         .addResponses("Forbidden", problem("Authenticated, but not allowed to perform this action."))
                         .addResponses("NotFound", problem("The referenced resource does not exist."))
-                        .addResponses("Conflict", problem("The request conflicts with existing data.")));
+                        .addResponses("Conflict", problem("The request conflicts with existing data."))
+                        .addResponses("TooManyRequests", problem("Rate limit exceeded. The `Retry-After` header gives "
+                                + "the number of seconds to wait.")
+                                .addHeaderObject("Retry-After", new Header()
+                                        .description("Seconds until the next request is allowed")
+                                        .schema(new IntegerSchema()))));
     }
 
     // Added after springdoc has copied the OpenAPI bean above: that copy cannot read back a schema with a

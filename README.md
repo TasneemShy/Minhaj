@@ -121,6 +121,17 @@ A Postman collection is also included in the `postman/` folder.
 
 **Password reset flow:** `forgot-password` always gives the same answer, whether or not the email is registered. For a registered email it sends a link to `<FRONTEND_URL>/reset-password?token=<token>` (`FRONTEND_URL` defaults to `http://localhost:5173`). The backend does not serve that page: the frontend reads `token` from the URL, asks for the new password and sends `POST /api/auth/reset-password` with `{"token", "newPassword"}`. The token is valid for 15 minutes and can be used once; asking again replaces the previous token.
 
+**Rate limits:** the public auth endpoints are rate limited per client, in memory (token buckets per app instance):
+
+| Endpoint | Default limit (`application.properties`) |
+| --- | --- |
+| `POST /api/auth/login` | 5 per minute per email + client IP (`app.rate-limit.login-per-email`), and 20 per minute per client IP across all emails (`app.rate-limit.login-per-ip`) |
+| `POST /api/auth/register`, `/forgot-password`, `/reset-password` | 10 per minute per client IP, counted separately for each endpoint (`app.rate-limit.per-ip`) |
+
+Over the limit the API answers `429 Too Many Requests` (Problem Details) with a `Retry-After` header in seconds. The window is `app.rate-limit.window` (default `1m`); `app.rate-limit.enabled=false` turns limiting off. The per-email login limit is also per IP, so someone guessing a password cannot lock the real owner out from another network.
+
+The client IP is the TCP peer address (`request.getRemoteAddr()`). `X-Forwarded-For` is ignored by default because any client can send it and would get a fresh limit with every request. If the API runs behind exactly one reverse proxy that sets that header, set `app.rate-limit.trust-forwarded-for=true` (the right-most address is used) or `server.forward-headers-strategy=native`. Limits are per instance: with several replicas each one counts on its own.
+
 ### Course Catalog & Learning
 
 | HTTP Method | Endpoint | Description | Access |
