@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -110,7 +111,8 @@ public class CourseService {
         }
         course.setStatus(CourseStatus.PUBLISHED);
         if (course.getPublishedAt() == null) {
-            course.setPublishedAt(LocalDateTime.now());
+            // Postgres timestamp(6) keeps microseconds; truncate so the response matches what is stored.
+            course.setPublishedAt(LocalDateTime.now().truncatedTo(ChronoUnit.MICROS));
         }
         return courseRepository.save(course);
     }
