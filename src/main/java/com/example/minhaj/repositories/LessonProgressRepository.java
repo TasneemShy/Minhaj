@@ -21,4 +21,8 @@ public interface LessonProgressRepository extends JpaRepository<LessonProgress, 
     @Modifying
     @Query("DELETE FROM LessonProgress p WHERE p.lesson.id IN (SELECT l.id FROM Lesson l WHERE l.course.id = :courseId)")
     void deleteByCourseId(@Param("courseId") Long courseId);
+
+    @Modifying
+    @Query("DELETE FROM LessonProgress p WHERE p.lesson.id = :lessonId")
+    void deleteByLessonId(@Param("lessonId") Long lessonId);
 }

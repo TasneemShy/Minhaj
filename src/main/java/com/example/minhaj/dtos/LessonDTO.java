@@ -6,9 +6,11 @@ public record LessonDTO(
         Long id,
         String title,
         String videoUrl,
-        Long courseId
+        Long courseId,
+        int position
 ) {
     public static LessonDTO from(Lesson lesson) {
-        return new LessonDTO(lesson.getId(), lesson.getTitle(), lesson.getVideoUrl(), lesson.getCourse().getId());
+        return new LessonDTO(lesson.getId(), lesson.getTitle(), lesson.getVideoUrl(), lesson.getCourse().getId(),
+                lesson.getPosition());
     }
 }

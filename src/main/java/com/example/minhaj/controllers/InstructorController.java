@@ -3,6 +3,7 @@ package com.example.minhaj.controllers;
 import com.example.minhaj.dtos.CourseDTO;
 import com.example.minhaj.dtos.CourseRequest;
 import com.example.minhaj.dtos.LessonDTO;
+import com.example.minhaj.dtos.LessonOrderRequest;
 import com.example.minhaj.dtos.LessonRequest;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Course;
@@ -20,6 +21,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 // Course management for instructors. Instructors may only touch their own courses; admins may act on any course.
@@ -94,5 +96,25 @@ public class InstructorController {
     public LessonDTO addLesson(@PathVariable Long courseId, @Valid @RequestBody LessonRequest request,
                                Authentication authentication) {
         return LessonDTO.from(courseService.addLesson(findOwnedCourse(courseId, authentication), request));
+    }
+
+    @PutMapping("/courses/{courseId}/lessons/order")
+    public List<LessonDTO> reorderLessons(@PathVariable Long courseId, @Valid @RequestBody LessonOrderRequest request,
+                                          Authentication authentication) {
+        return courseService.reorderLessons(findOwnedCourse(courseId, authentication), request.lessonIds())
+                .stream().map(LessonDTO::from).toList();
+    }
+
+    @PutMapping("/courses/{courseId}/lessons/{lessonId}")
+    public LessonDTO updateLesson(@PathVariable Long courseId, @PathVariable Long lessonId,
+                                  @Valid @RequestBody LessonRequest request, Authentication authentication) {
+        return LessonDTO.from(courseService.updateLesson(findOwnedCourse(courseId, authentication), lessonId, request));
+    }
+
+    @DeleteMapping("/courses/{courseId}/lessons/{lessonId}")
+    public ResponseEntity<?> deleteLesson(@PathVariable Long courseId, @PathVariable Long lessonId,
+                                          Authentication authentication) {
+        courseService.deleteLesson(findOwnedCourse(courseId, authentication), lessonId);
+        return ResponseEntity.ok(Map.of("message", "Lesson deleted successfully!"));
     }
 }
