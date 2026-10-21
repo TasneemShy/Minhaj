@@ -117,4 +117,25 @@ public class EmailServiceTest {
 
         assertDoesNotThrow(() -> emailService.sendPasswordResetEmail("test@example.com", "token-123"));
     }
+
+    @Test
+    void testSendCourseCompletedEmailLinksToCertificate() {
+        emailService.sendCourseCompletedEmail("test@example.com", "Tasneem", 42L, "Java Basics");
+
+        ArgumentCaptor<SimpleMailMessage> messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(messageCaptor.capture());
+
+        SimpleMailMessage sentMessage = messageCaptor.getValue();
+        assertEquals("test@example.com", sentMessage.getTo()[0]);
+        assertTrue(sentMessage.getSubject().contains("Java Basics"), sentMessage.getSubject());
+        assertTrue(sentMessage.getText().contains("Tasneem"), sentMessage.getText());
+        assertTrue(sentMessage.getText().contains("https://app.example.com/courses/42/certificate\n"), sentMessage.getText());
+    }
+
+    @Test
+    void testSendCourseCompletedEmailSwallowsMailException() {
+        doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(SimpleMailMessage.class));
+
+        assertDoesNotThrow(() -> emailService.sendCourseCompletedEmail("test@example.com", "Tasneem", 1L, "Java"));
+    }
 }

@@ -127,4 +127,15 @@ public interface AnalyticsRepository extends Repository<Course, Long> {
               and exists (select 1 from User u join u.enrolledCourses c where u = lp.user and c.id = :courseId)
             """)
     long countCompletedLessonsByEnrolledStudents(@Param("courseId") Long courseId);
+
+    // Currently enrolled students who completed every current lesson; 0 for a course without lessons.
+    // Same rule as CourseCompletionService.
+    @Query("""
+            select count(u) from User u join u.enrolledCourses c
+            where c.id = :courseId
+              and (select count(l) from Lesson l where l.course.id = :courseId) > 0
+              and (select count(lp) from LessonProgress lp where lp.user = u and lp.lesson.course.id = :courseId)
+                  = (select count(l) from Lesson l where l.course.id = :courseId)
+            """)
+    long countCompletionsByCourseId(@Param("courseId") Long courseId);
 }

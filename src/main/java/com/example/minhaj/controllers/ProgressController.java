@@ -1,6 +1,7 @@
 package com.example.minhaj.controllers;
 
 import com.example.minhaj.exceptions.ApiException;
+import com.example.minhaj.dtos.CompletionDTO;
 import com.example.minhaj.dtos.CourseProgressDTO;
 import com.example.minhaj.exceptions.ResourceNotFoundException;
 import com.example.minhaj.models.Course;
@@ -11,7 +12,10 @@ import com.example.minhaj.repositories.CourseRepository;
 import com.example.minhaj.repositories.LessonProgressRepository;
 import com.example.minhaj.repositories.LessonRepository;
 import com.example.minhaj.repositories.UserRepository;
+import com.example.minhaj.services.CourseCompletionService;
+import com.example.minhaj.services.EmailService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -22,8 +26,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 import static com.example.minhaj.config.SwaggerConfig.*;
 
@@ -37,17 +43,23 @@ public class ProgressController {
     private final LessonRepository lessonRepository;
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
+    private final CourseCompletionService completionService;
+    private final EmailService emailService;
 
     public ProgressController(LessonProgressRepository progressRepository, LessonRepository lessonRepository,
-                              CourseRepository courseRepository, UserRepository userRepository) {
+                              CourseRepository courseRepository, UserRepository userRepository,
+                              CourseCompletionService completionService, EmailService emailService) {
         this.progressRepository = progressRepository;
         this.lessonRepository = lessonRepository;
         this.courseRepository = courseRepository;
         this.userRepository = userRepository;
+        this.completionService = completionService;
+        this.emailService = emailService;
     }
 
     @Operation(summary = "Mark a lesson completed",
-            description = "Enrolled students. Idempotent; returns the caller's updated progress in the course. 403 if not enrolled, 404 if the lesson is not in the course.")
+            description = "Enrolled students. Idempotent; returns the caller's updated progress in the course. 403 if not enrolled, 404 if the lesson is not in the course. "
+                    + "When this completes the course (its last missing lesson), a congratulations email is sent; repeating the call sends nothing.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Updated course progress", content = @Content(schema = @Schema(implementation = CourseProgressDTO.class))),
             @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
@@ -70,11 +82,20 @@ public class ProgressController {
 
         Lesson lesson = findLessonInCourse(lessonId, courseId);
 
-        if (!progressRepository.existsByUserIdAndLessonId(student.getId(), lesson.getId())) {
+        boolean newlyCompleted = !progressRepository.existsByUserIdAndLessonId(student.getId(), lesson.getId());
+        if (newlyCompleted) {
             progressRepository.save(new LessonProgress(student, lesson));
         }
 
-        return ResponseEntity.ok(buildProgress(student, course));
+        CourseProgressDTO progress = buildProgress(student, course);
+
+        // The course was incomplete while this lesson was missing, so a new row that completes it is the
+        // incomplete -> complete transition. Undoing a lesson and completing it again sends another email.
+        if (newlyCompleted && progress.completed()) {
+            emailService.sendCourseCompletedEmail(student.getEmail(), student.getName(), course.getId(), course.getTitle());
+        }
+
+        return ResponseEntity.ok(progress);
     }
 
     @Operation(summary = "Mark a lesson not completed",
@@ -151,6 +172,49 @@ public class ProgressController {
         return ResponseEntity.ok(progress);
     }
 
+    @Operation(summary = "Get my completion certificate for a course",
+            description = "Enrolled students who completed every lesson of the course. 404 if the course does not exist, "
+                    + "the caller is not enrolled, or the course is not completed (including courses without lessons).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Completion details", content = @Content(schema = @Schema(implementation = CompletionDTO.class))),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED),
+            @ApiResponse(responseCode = "404", ref = NOT_FOUND)
+    })
+    @GetMapping("/courses/{courseId}/completion")
+    public CompletionDTO getCompletion(@PathVariable Long courseId, Principal principal) {
+
+        if (principal == null) {
+            throw ApiException.unauthorized("You must be logged in to view your progress.");
+        }
+
+        User student = findStudent(principal);
+        Course course = findCourse(courseId);
+
+        // Not enrolled and not completed look the same: there is no certificate to show.
+        Optional<CompletionDTO> completion = isEnrolled(student, courseId)
+                ? completionService.findCompletion(student, course)
+                : Optional.empty();
+        return completion.orElseThrow(() -> new ResourceNotFoundException("You have not completed course " + courseId + "."));
+    }
+
+    @Operation(summary = "List my completed courses",
+            description = "Authenticated users. Completion details for each enrolled course the caller has completed, "
+                    + "ordered by course id; empty when none.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Completed courses", content = @Content(array = @ArraySchema(schema = @Schema(implementation = CompletionDTO.class)))),
+            @ApiResponse(responseCode = "401", ref = UNAUTHORIZED)
+    })
+    @GetMapping("/my-courses/completed")
+    public List<CompletionDTO> getMyCompletedCourses(Principal principal) {
+
+        User student = findStudent(principal);
+
+        return student.getEnrolledCourses().stream()
+                .sorted(Comparator.comparing(Course::getId))
+                .flatMap(course -> completionService.findCompletion(student, course).stream())
+                .toList();
+    }
+
     private CourseProgressDTO buildProgress(User student, Course course) {
         List<Long> completedLessonIds = progressRepository.findByUserIdAndLessonCourseId(student.getId(), course.getId())
                 .stream()
@@ -162,7 +226,10 @@ public class ProgressController {
         int completed = completedLessonIds.size();
         int percentage = totalLessons == 0 ? 0 : (int) Math.round(completed * 100.0 / totalLessons);
 
-        return new CourseProgressDTO(course.getId(), course.getTitle(), completed, totalLessons, percentage, completedLessonIds);
+        Optional<LocalDateTime> completedAt = completionService.completedAt(student, course);
+
+        return new CourseProgressDTO(course.getId(), course.getTitle(), completed, totalLessons, percentage, completedLessonIds,
+                completedAt.isPresent(), completedAt.orElse(null));
     }
 
     private User findStudent(Principal principal) {
