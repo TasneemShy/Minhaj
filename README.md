@@ -1,16 +1,36 @@
-# Minhaj - Educational Platform API
+# Minhaj: Educational Platform API
 
 [![CI](https://github.com/TasneemShy/Minhaj/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TasneemShy/Minhaj/actions/workflows/ci.yml)
+![Java 25](https://img.shields.io/badge/Java-25-orange)
+![Spring Boot 4](https://img.shields.io/badge/Spring%20Boot-4-6DB33F)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)
 
-Dependencies are kept current by [Dependabot](.github/dependabot.yml) (weekly update PRs for Maven, GitHub Actions and Docker).
+Minhaj is a backend REST API for an online learning platform. Instructors build and publish courses with lessons and quizzes; students enroll, track their progress and earn a completion certificate; admins get platform analytics. It ships with a Docker Compose setup for running the API alongside PostgreSQL.
 
-Minhaj is a backend REST API for an online learning platform. It covers stateless JWT authentication, role-based access control (RBAC), courses with lessons, student enrollment, course reviews with ratings, email-based password reset, and interactive OpenAPI documentation. It ships with a Docker Compose setup for running the API alongside PostgreSQL.
+## Highlights
+
+| | |
+|---|---|
+| **API** | 65 endpoints across auth, courses, lessons, quizzes, progress, reviews, instructor and admin, documented in Swagger UI |
+| **Testing** | ~260 tests with ~97% line coverage (JaCoCo): unit, `@WebMvcTest` slices and integration tests against a real PostgreSQL in Docker (Testcontainers), run in CI on every PR |
+| **Security** | JWT with rotating refresh tokens and reuse detection, email verification, hashed reset tokens, rate limiting, role-based access, CORS allow-list |
+| **Search** | Postgres full-text search in Arabic and English (phrases, `or`, exclusions, prefix matching, relevance ranking) |
+| **Operations** | Flyway migrations, multi-stage Docker image, health and readiness probes, Prometheus metrics, structured JSON logs with request IDs |
+| **Workflow** | Protected `main`, one feature per branch and pull request, required CI checks, Dependabot for Maven, GitHub Actions and Docker |
+
+## Contents
+
+- [Tech Stack](#tech-stack) · [Architectural Highlights](#architectural-highlights) · [Features](#features)
+- [Swagger UI](#api-documentation-swagger-ui) · [Postman](#postman) · [API Endpoints Reference](#api-endpoints-reference)
+- [Error format](#error-format) · [Monitoring](#monitoring)
+- [Getting Started](#getting-started) · [Running tests](#running-tests) · [Database migrations](#database-migrations) · [Roadmap](#roadmap)
 
 ---
 
 ## Tech Stack
 
-* **Framework:** Spring Boot 4.1.0
+* **Framework:** Spring Boot 4.1
 * **Language:** Java 25
 * **Database:** PostgreSQL
 * **Security:** Spring Security & JWT (JSON Web Tokens)
